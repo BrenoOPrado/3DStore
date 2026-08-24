@@ -84,36 +84,32 @@ export function CheckoutPage() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="mx-auto grid max-w-7xl gap-10 px-5 py-10 lg:grid-cols-[1fr_360px]">
-      <div className="space-y-8">
+    <form onSubmit={onSubmit} className="checkout-layout">
+      <div className="checkout-stack">
         <div>
-          <p className="text-sm text-cyan">Checkout</p>
-          <h1 className="mt-1 text-3xl font-bold">Finalizar compra</h1>
-          <p className="mt-2 text-sm text-muted">
+          <p className="eyebrow">Checkout</p>
+          <h1 className="page-title">Finalizar compra</h1>
+          <p className="page-lead">
             Dados de demonstração já preenchidos. Altere o CEP para recalcular o frete.
           </p>
         </div>
 
-        <section className="card-surface rounded-2xl p-6">
-          <h2 className="mb-4 flex items-center gap-2 font-semibold">
-            <MapPin size={18} className="text-cyan" />
+        <section className="panel card-surface">
+          <h2 className="panel__title">
+            <MapPin size={18} className="icon-cyan" />
             Endereço de entrega
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nome" value={address.name} onChange={set("name")} className="sm:col-span-2" />
+          <div className="form-grid">
+            <Field label="Nome" value={address.name} onChange={set("name")} wide />
             <Field label="E-mail" type="email" value={address.email} onChange={set("email")} />
             <Field
               label="Telefone"
               value={address.phone}
               onChange={(v) => set("phone")(maskPhone(v))}
             />
-            <Field
-              label="CEP"
-              value={address.cep}
-              onChange={(v) => set("cep")(maskCep(v))}
-            />
+            <Field label="CEP" value={address.cep} onChange={(v) => set("cep")(maskCep(v))} />
             <Field label="Estado" value={address.state} onChange={set("state")} />
-            <Field label="Rua" value={address.street} onChange={set("street")} className="sm:col-span-2" />
+            <Field label="Rua" value={address.street} onChange={set("street")} wide />
             <Field label="Número" value={address.number} onChange={set("number")} />
             <Field label="Complemento" value={address.complement} onChange={set("complement")} />
             <Field label="Bairro" value={address.neighborhood} onChange={set("neighborhood")} />
@@ -121,38 +117,31 @@ export function CheckoutPage() {
           </div>
         </section>
 
-        <section className="card-surface rounded-2xl p-6">
-          <h2 className="mb-4 flex items-center gap-2 font-semibold">
-            <Truck size={18} className="text-cyan" />
+        <section className="panel card-surface">
+          <h2 className="panel__title">
+            <Truck size={18} className="icon-cyan" />
             Frete
           </h2>
           {options.length === 0 ? (
-            <p className="text-sm text-muted">Informe um CEP válido com 8 dígitos para calcular o frete.</p>
+            <p className="muted">Informe um CEP válido com 8 dígitos para calcular o frete.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="option-list">
               {options.map((opt) => (
                 <li key={opt.id}>
-                  <label
-                    className={`flex cursor-pointer items-center justify-between gap-4 rounded-xl border px-4 py-3 ${
-                      shippingId === opt.id
-                        ? "border-purple bg-purple/15"
-                        : "border-line hover:border-white/20"
-                    }`}
-                  >
-                    <span className="flex items-center gap-3">
+                  <label className={`option${shippingId === opt.id ? " is-active" : ""}`}>
+                    <span className="option__left">
                       <input
                         type="radio"
                         name="shipping"
                         checked={shippingId === opt.id}
                         onChange={() => setShippingId(opt.id)}
-                        className="accent-purple"
                       />
                       <span>
-                        <span className="block text-sm font-medium">{opt.name}</span>
-                        <span className="text-xs text-muted">{opt.days}</span>
+                        <span className="option__name">{opt.name}</span>
+                        <span className="option__meta">{opt.days}</span>
                       </span>
                     </span>
-                    <span className="text-sm font-semibold">
+                    <span className="option__price">
                       {opt.price === 0 ? "Grátis" : formatPrice(opt.price)}
                     </span>
                   </label>
@@ -162,12 +151,12 @@ export function CheckoutPage() {
           )}
         </section>
 
-        <section className="card-surface rounded-2xl p-6">
-          <h2 className="mb-4 flex items-center gap-2 font-semibold">
-            <CreditCard size={18} className="text-cyan" />
+        <section className="panel card-surface">
+          <h2 className="panel__title">
+            <CreditCard size={18} className="icon-cyan" />
             Pagamento
           </h2>
-          <div className="mb-4 grid gap-2 sm:grid-cols-3">
+          <div className="pay-grid">
             <PayOption
               active={method === "credit"}
               onClick={() => setMethod("credit")}
@@ -189,18 +178,18 @@ export function CheckoutPage() {
           </div>
 
           {method === "credit" && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="form-grid">
               <Field
                 label="Nome no cartão"
                 value={card.holder}
                 onChange={(v) => setCard((c) => ({ ...c, holder: v }))}
-                className="sm:col-span-2"
+                wide
               />
               <Field
                 label="Número"
                 value={card.number}
                 onChange={(v) => setCard((c) => ({ ...c, number: maskCard(v) }))}
-                className="sm:col-span-2"
+                wide
               />
               <Field
                 label="Validade"
@@ -212,12 +201,12 @@ export function CheckoutPage() {
                 value={card.cvv}
                 onChange={(v) => setCard((c) => ({ ...c, cvv: v.replace(/\D/g, "").slice(0, 4) }))}
               />
-              <label className="block text-sm sm:col-span-2">
-                <span className="mb-1.5 block text-muted">Parcelamento</span>
+              <label className="field field--wide">
+                <span className="field__label">Parcelamento</span>
                 <select
                   value={installments}
                   onChange={(e) => setInstallments(Number(e.target.value))}
-                  className="h-11 w-full rounded-xl border border-line bg-[#101018] px-3 outline-none focus:border-purple/50"
+                  className="field__control"
                 >
                   {parcels.map((p) => (
                     <option key={p.n} value={p.n}>
@@ -230,19 +219,17 @@ export function CheckoutPage() {
           )}
 
           {method === "pix" && (
-            <div className="rounded-xl border border-line bg-white/5 p-4 text-sm text-muted">
+            <div className="notice">
               <p>Após confirmar, um QR Code de demonstração será gerado.</p>
-              <p className="mt-2 font-mono text-xs text-white/80">
-                0002012633...BR.GOV.BCB.PIX...3DSTORE...6304A1B2
-              </p>
-              <p className="mt-2">Aprovação em poucos segundos. Sem parcelamento.</p>
+              <p className="notice__code">0002012633...BR.GOV.BCB.PIX...3DSTORE...6304A1B2</p>
+              <p>Aprovação em poucos segundos. Sem parcelamento.</p>
             </div>
           )}
 
           {method === "boleto" && (
-            <div className="rounded-xl border border-line bg-white/5 p-4 text-sm text-muted">
+            <div className="notice">
               <p>O boleto de demonstração vence em 3 dias úteis.</p>
-              <p className="mt-2 font-mono text-xs tracking-widest text-white/80">
+              <p className="notice__code notice__code--wide">
                 23791.22928 60000.000003 00000.000400 1 844700000{Math.round(total * 100)
                   .toString()
                   .padStart(8, "0")}
@@ -252,46 +239,42 @@ export function CheckoutPage() {
         </section>
       </div>
 
-      <aside className="card-surface h-fit rounded-2xl p-6 lg:sticky lg:top-24">
-        <h2 className="font-semibold">Resumo do pedido</h2>
-        <ul className="mt-4 space-y-3">
+      <aside className="summary checkout-summary card-surface">
+        <h2>Resumo do pedido</h2>
+        <ul className="checkout-items">
           {detailed.map((item) => (
-            <li key={`${item.product.id}-${item.color}`} className="flex gap-3 text-sm">
-              <img
-                src={item.product.image}
-                alt=""
-                className="h-14 w-14 rounded-lg object-cover object-top"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{item.product.name}</p>
-                <p className="text-xs text-muted">
+            <li key={`${item.product.id}-${item.color}`} className="checkout-item">
+              <img src={item.product.image} alt="" />
+              <div className="checkout-item__info">
+                <p>{item.product.name}</p>
+                <p>
                   {item.color} · {item.quantity}x
                 </p>
               </div>
-              <p className="text-sm">{formatPrice(item.line)}</p>
+              <p>{formatPrice(item.line)}</p>
             </li>
           ))}
         </ul>
-        <div className="mt-4 space-y-2 border-t border-line pt-4 text-sm text-muted">
+        <div className="summary__rows">
           <Row label="Subtotal" value={formatPrice(subtotal)} />
           <Row
             label="Frete"
-            value={
-              shipping ? (shipping.price === 0 ? "Grátis" : formatPrice(shipping.price)) : "—"
-            }
+            value={shipping ? (shipping.price === 0 ? "Grátis" : formatPrice(shipping.price)) : "—"}
           />
         </div>
-        <div className="mt-4 flex justify-between border-t border-line pt-4 text-lg font-bold">
+        <div className="summary__total">
           <span>Total</span>
-          <span>{formatPrice(selectedParcel && method === "credit" ? selectedParcel.amount : total)}</span>
+          <span>
+            {formatPrice(selectedParcel && method === "credit" ? selectedParcel.amount : total)}
+          </span>
         </div>
         {method === "credit" && selectedParcel && selectedParcel.n > 1 && (
-          <p className="mt-1 text-right text-xs text-muted">{selectedParcel.label}</p>
+          <p className="parcel-note">{selectedParcel.label}</p>
         )}
-        <button type="submit" className="btn-primary mt-6 w-full rounded-xl py-3 text-sm font-semibold">
+        <button type="submit" className="btn-primary btn-primary--block">
           Confirmar pedido
         </button>
-        <Link to="/carrinho" className="mt-3 block text-center text-sm text-muted hover:text-white">
+        <Link to="/carrinho" className="summary__back">
           Voltar ao carrinho
         </Link>
       </aside>
@@ -301,7 +284,7 @@ export function CheckoutPage() {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between">
+    <div className="summary__row">
       <span>{label}</span>
       <span>{value}</span>
     </div>
@@ -323,9 +306,7 @@ function PayOption({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium ${
-        active ? "border-purple bg-purple/20" : "border-line text-muted hover:text-white"
-      }`}
+      className={`pay-option${active ? " is-active" : ""}`}
     >
       {icon}
       {label}
@@ -338,23 +319,23 @@ function Field({
   value,
   onChange,
   type = "text",
-  className = "",
+  wide = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
-  className?: string;
+  wide?: boolean;
 }) {
   return (
-    <label className={`block text-sm ${className}`}>
-      <span className="mb-1.5 block text-muted">{label}</span>
+    <label className={wide ? "field field--wide" : "field"}>
+      <span className="field__label">{label}</span>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={label !== "Complemento"}
-        className="h-11 w-full rounded-xl border border-line bg-[#101018] px-3 outline-none focus:border-purple/50"
+        className="field__control"
       />
     </label>
   );

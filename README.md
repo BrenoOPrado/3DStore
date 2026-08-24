@@ -21,7 +21,7 @@ Documentação completa da ideia, telas, dados e regras: [`docs/especificacao.md
 | --- | --- |
 | UI | React 19 + TypeScript |
 | Rotas | React Router 7 |
-| Estilo | Tailwind CSS 4 (tema em `src/index.css`) |
+| Estilo | CSS em `src/index.css` |
 | Ícones | lucide-react |
 | Build | Vite 7 |
 

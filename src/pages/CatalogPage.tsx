@@ -34,20 +34,16 @@ export function CatalogPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-10">
-      <p className="text-sm text-cyan">Loja</p>
-      <h1 className="mt-1 text-3xl font-bold">Catálogo</h1>
-      <p className="mt-2 max-w-2xl text-muted">
-        Explore vasos, figures, games e utilitários impressos em 3D.
-      </p>
+    <div className="page catalog">
+      <p className="eyebrow">Loja</p>
+      <h1 className="page-title">Catálogo</h1>
+      <p className="page-lead">Explore vasos, figures, games e utilitários impressos em 3D.</p>
 
-      <div className="mt-8 flex flex-wrap gap-2">
+      <div className="filters">
         <button
           type="button"
           onClick={() => setCategory("")}
-          className={`rounded-full border px-4 py-1.5 text-sm ${
-            !category ? "border-purple bg-purple/20" : "border-line text-muted"
-          }`}
+          className={`chip${!category ? " is-active" : ""}`}
         >
           Todas
         </button>
@@ -56,19 +52,15 @@ export function CatalogPage() {
             key={c.id}
             type="button"
             onClick={() => setCategory(c.id)}
-            className={`rounded-full border px-4 py-1.5 text-sm ${
-              category === c.id
-                ? "border-purple bg-purple/20"
-                : "border-line text-muted hover:text-white"
-            }`}
+            className={`chip${category === c.id ? " is-active" : ""}`}
           >
             {c.label}
           </button>
         ))}
       </div>
 
-      <div className="mt-6 flex items-center justify-between gap-4">
-        <p className="text-sm text-muted">{list.length} produtos</p>
+      <div className="catalog-toolbar">
+        <p className="catalog-toolbar__count">{list.length} produtos</p>
         <select
           value={sort}
           onChange={(e) => {
@@ -76,7 +68,7 @@ export function CatalogPage() {
             next.set("ordem", e.target.value);
             setParams(next);
           }}
-          className="rounded-xl border border-line bg-[#101018] px-3 py-2 text-sm outline-none"
+          className="select select--compact"
         >
           <option value="destaque">Destaque</option>
           <option value="menor">Menor preço</option>
@@ -86,9 +78,9 @@ export function CatalogPage() {
       </div>
 
       {list.length === 0 ? (
-        <p className="mt-16 text-center text-muted">Nenhum produto encontrado.</p>
+        <p className="empty-note">Nenhum produto encontrado.</p>
       ) : (
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="product-grid">
           {list.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}

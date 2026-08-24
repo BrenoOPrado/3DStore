@@ -261,7 +261,7 @@ Itens `isNew` em Lançamentos: filtro dino, porta-alho, porta-chaves, vasos dino
 └── src/
     ├── main.tsx
     ├── App.tsx
-    ├── index.css              tokens Tailwind
+    ├── index.css              estilos e tokens visuais
     ├── vite-env.d.ts
     ├── data/products.ts
     ├── context/

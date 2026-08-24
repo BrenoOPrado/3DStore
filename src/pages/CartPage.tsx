@@ -8,10 +8,10 @@ export function CartPage() {
 
   if (count === 0) {
     return (
-      <div className="mx-auto max-w-3xl px-5 py-24 text-center">
-        <h1 className="text-3xl font-bold">Seu carrinho está vazio</h1>
-        <p className="mt-3 text-muted">Explore o catálogo e encontre a peça certa.</p>
-        <Link to="/catalogo" className="btn-primary mt-6 inline-flex rounded-xl px-5 py-3 text-sm font-semibold">
+      <div className="page page--narrow page--center empty-state">
+        <h1>Seu carrinho está vazio</h1>
+        <p>Explore o catálogo e encontre a peça certa.</p>
+        <Link to="/catalogo" className="btn-primary">
           Ir às compras
         </Link>
       </div>
@@ -19,48 +19,39 @@ export function CartPage() {
   }
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-10 px-5 py-10 lg:grid-cols-[1fr_340px]">
+    <div className="cart-layout">
       <div>
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Carrinho</h1>
-          <button type="button" onClick={clear} className="text-sm text-muted hover:text-white">
+        <div className="cart-head">
+          <h1>Carrinho</h1>
+          <button type="button" onClick={clear} className="ghost-link">
             Limpar
           </button>
         </div>
-        <ul className="space-y-4">
+        <ul className="cart-list">
           {detailed.map((item) => (
-            <li
-              key={`${item.product.id}-${item.color}`}
-              className="card-surface flex gap-4 rounded-2xl p-4"
-            >
-              <img
-                src={item.product.image}
-                alt=""
-                className="h-24 w-24 shrink-0 rounded-xl object-cover object-top"
-              />
-              <div className="flex flex-1 flex-col">
-                <div className="flex justify-between gap-4">
+            <li key={`${item.product.id}-${item.color}`} className="cart-item card-surface">
+              <img src={item.product.image} alt="" className="cart-item__img" />
+              <div className="cart-item__body">
+                <div className="cart-item__top">
                   <div>
-                    <Link to={`/produto/${item.product.id}`} className="font-semibold hover:text-cyan">
+                    <Link to={`/produto/${item.product.id}`} className="cart-item__name">
                       {item.product.name}
                     </Link>
-                    <p className="text-sm text-muted">{item.color}</p>
+                    <p className="cart-item__color">{item.color}</p>
                   </div>
-                  <p className="font-semibold">{formatPrice(item.line)}</p>
+                  <p className="cart-item__line">{formatPrice(item.line)}</p>
                 </div>
-                <div className="mt-auto flex items-center justify-between pt-3">
-                  <div className="flex items-center rounded-lg border border-line">
+                <div className="cart-item__actions">
+                  <div className="qty qty--sm">
                     <button
                       type="button"
-                      className="grid h-8 w-8 place-items-center"
                       onClick={() => setQty(item.product.id, item.color, item.quantity - 1)}
                     >
                       <Minus size={14} />
                     </button>
-                    <span className="w-7 text-center text-sm">{item.quantity}</span>
+                    <span>{item.quantity}</span>
                     <button
                       type="button"
-                      className="grid h-8 w-8 place-items-center"
                       onClick={() => setQty(item.product.id, item.color, item.quantity + 1)}
                     >
                       <Plus size={14} />
@@ -69,7 +60,7 @@ export function CartPage() {
                   <button
                     type="button"
                     onClick={() => remove(item.product.id, item.color)}
-                    className="text-muted hover:text-white"
+                    className="icon-muted"
                     aria-label="Remover"
                   >
                     <Trash2 size={16} />
@@ -80,24 +71,24 @@ export function CartPage() {
           ))}
         </ul>
       </div>
-      <aside className="card-surface h-fit rounded-2xl p-6">
-        <h2 className="font-semibold">Resumo</h2>
-        <div className="mt-4 flex justify-between text-sm text-muted">
+      <aside className="summary card-surface">
+        <h2>Resumo</h2>
+        <div className="summary__row">
           <span>Subtotal</span>
           <span>{formatPrice(subtotal)}</span>
         </div>
-        <div className="mt-2 flex justify-between text-sm text-muted">
+        <div className="summary__row summary__row--tight">
           <span>Frete</span>
           <span>Calculado no checkout</span>
         </div>
-        <div className="mt-4 flex justify-between border-t border-line pt-4 text-lg font-bold">
+        <div className="summary__total">
           <span>Total</span>
           <span>{formatPrice(subtotal)}</span>
         </div>
-        <Link to="/checkout" className="btn-primary mt-6 block w-full rounded-xl py-3 text-center text-sm font-semibold">
+        <Link to="/checkout" className="btn-primary btn-primary--block">
           Finalizar compra
         </Link>
-        <Link to="/catalogo" className="mt-3 block text-center text-sm text-muted hover:text-white">
+        <Link to="/catalogo" className="summary__back">
           Continuar comprando
         </Link>
       </aside>

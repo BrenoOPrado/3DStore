@@ -23,9 +23,9 @@ export function ProductPage() {
 
   if (!product) {
     return (
-      <div className="mx-auto max-w-3xl px-5 py-24 text-center">
-        <h1 className="text-2xl font-bold">Produto não encontrado</h1>
-        <Link to="/catalogo" className="mt-4 inline-block text-cyan">
+      <div className="page page--narrow page--center">
+        <h1 className="page-title">Produto não encontrado</h1>
+        <Link to="/catalogo" className="not-found-link">
           Voltar ao catálogo
         </Link>
       </div>
@@ -43,52 +43,46 @@ export function ProductPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-10">
-      <p className="text-sm text-muted">
-        <Link to="/catalogo" className="hover:text-white">
+    <div className="page">
+      <p className="crumb">
+        <Link to="/catalogo" className="link-hover">
           Catálogo
         </Link>{" "}
         / {category?.label} / {product.name}
       </p>
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-2">
-        <div className="aspect-square overflow-hidden rounded-3xl border border-line bg-[#0a0a12]">
+      <div className="product-layout">
+        <div className="product-gallery">
           <img
             src={product.image}
             alt={product.name}
-            className={`h-full w-full ${productImageClass(product, "detail")}`}
+            className={productImageClass(product, "detail")}
           />
         </div>
-        <div>
-          {product.isNew && (
-            <span className="rounded-full bg-cyan/20 px-3 py-1 text-xs font-semibold text-cyan">
-              Lançamento
-            </span>
-          )}
-          <h1 className="mt-3 text-3xl font-bold">{product.name}</h1>
-          <p className="mt-2 flex items-center gap-2 text-sm text-muted">
-            <Star size={14} className="fill-cyan text-cyan" />
+        <div className="product-info">
+          {product.isNew && <span className="product-info__badge">Lançamento</span>}
+          <h1>{product.name}</h1>
+          <p className="product-info__rating">
+            <Star size={14} className="icon-star" />
             {product.rating.toFixed(1)} · {product.reviews} avaliações · {product.material}
           </p>
-          <div className="mt-4 flex items-end gap-3">
-            <p className="text-3xl font-extrabold">{formatPrice(product.price)}</p>
+          <div className="product-info__prices">
+            <p className="product-info__price">{formatPrice(product.price)}</p>
             {product.originalPrice && (
-              <p className="text-muted line-through">{formatPrice(product.originalPrice)}</p>
+              <p className="product-info__old">{formatPrice(product.originalPrice)}</p>
             )}
           </div>
-          <p className="mt-5 leading-relaxed text-muted">{product.description}</p>
+          <p className="product-info__desc">{product.description}</p>
 
-          <div className="mt-6">
-            <p className="mb-2 text-sm font-medium">Cor</p>
-            <div className="flex flex-wrap gap-2">
+          <div className="product-info__colors">
+            <p>Cor</p>
+            <div className="chip-row">
               {product.colors.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
-                  className={`rounded-full border px-3 py-1.5 text-sm ${
-                    color === c ? "border-purple bg-purple/20" : "border-line text-muted"
-                  }`}
+                  className={`chip${color === c ? " is-active" : ""}`}
                 >
                   {c}
                 </button>
@@ -96,39 +90,29 @@ export function ProductPage() {
             </div>
           </div>
 
-          <div className="mt-6 flex items-center gap-4">
-            <div className="flex items-center rounded-xl border border-line">
+          <div className="product-info__buy">
+            <div className="qty">
               <button
                 type="button"
-                className="grid h-11 w-11 place-items-center"
                 onClick={() => setQty((n) => Math.max(1, n - 1))}
                 aria-label="Diminuir"
               >
                 <Minus size={16} />
               </button>
-              <span className="w-8 text-center text-sm">{qty}</span>
-              <button
-                type="button"
-                className="grid h-11 w-11 place-items-center"
-                onClick={() => setQty((n) => n + 1)}
-                aria-label="Aumentar"
-              >
+              <span>{qty}</span>
+              <button type="button" onClick={() => setQty((n) => n + 1)} aria-label="Aumentar">
                 <Plus size={16} />
               </button>
             </div>
-            <button
-              type="button"
-              onClick={addToCart}
-              className="btn-primary inline-flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold"
-            >
+            <button type="button" onClick={addToCart} className="btn-primary btn-primary--grow">
               <ShoppingCart size={16} />
               Adicionar ao carrinho
             </button>
           </div>
           {added && (
-            <div className="mt-4 flex items-center justify-between rounded-xl border border-purple/30 bg-purple/10 px-4 py-3 text-sm">
+            <div className="added-banner">
               Adicionado.
-              <button type="button" className="font-semibold text-cyan" onClick={() => navigate("/carrinho")}>
+              <button type="button" className="link-cyan" onClick={() => navigate("/carrinho")}>
                 Ver carrinho
               </button>
             </div>
@@ -137,9 +121,9 @@ export function ProductPage() {
       </div>
 
       {related.length > 0 && (
-        <section className="mt-16">
-          <h2 className="mb-6 text-2xl font-bold">Você também pode gostar</h2>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="related">
+          <h2>Você também pode gostar</h2>
+          <div className="product-grid">
             {related.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}

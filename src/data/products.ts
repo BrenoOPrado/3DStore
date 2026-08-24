@@ -277,12 +277,12 @@ export function searchProducts(query: string) {
 
 export function productImageClass(product: Product, mode: "card" | "detail" = "card") {
   const pos = product.imagePosition ?? "center";
-  const posClass = pos === "top" ? "object-top" : "object-center";
+  const posClass = pos === "top" ? "img-pos-top" : "img-pos-center";
 
   if (mode === "detail" && pos === "top") {
-    return `object-contain ${posClass}`;
+    return `img-fit-contain ${posClass}`;
   }
 
   const fit = product.imageFit ?? "cover";
-  return `${fit === "contain" ? "object-contain" : "object-cover"} ${posClass}`;
+  return `${fit === "contain" ? "img-fit-contain" : "img-fit-cover"} ${posClass}`;
 }

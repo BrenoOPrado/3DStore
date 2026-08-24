@@ -15,10 +15,10 @@ function ScrollToTop() {
 
 export function Layout() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="layout">
       <ScrollToTop />
       <Header />
-      <main className="flex-1">
+      <main className="layout__main">
         <Outlet />
       </main>
       <Footer />

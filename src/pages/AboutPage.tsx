@@ -3,32 +3,32 @@ import { Printer, ShieldCheck, Truck } from "lucide-react";
 
 export function AboutPage() {
   return (
-    <div className="mx-auto max-w-4xl px-5 py-12">
-      <p className="text-sm text-cyan">Quem somos</p>
-      <h1 className="mt-1 text-4xl font-bold">Sobre nós</h1>
-      <p className="mt-5 text-lg leading-relaxed text-muted">
-        A 3D Store nasceu de um ateliê de impressão. Unimos modelagem, fatiamento
-        e acabamento artesanal para criar produtos que parecem saídos de um
-        conceito — porque, de fato, cada um começa como um arquivo 3D.
+    <div className="about">
+      <p className="eyebrow">Quem somos</p>
+      <h1>Sobre nós</h1>
+      <p className="about__lead">
+        A 3D Store nasceu de um ateliê de impressão. Unimos modelagem, fatiamento e acabamento
+        artesanal para criar produtos que parecem saídos de um conceito — porque, de fato,
+        cada um começa como um arquivo 3D.
       </p>
       <img
         src="https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?auto=format&fit=crop&w=1400&q=80"
         alt="Impressora 3D no ateliê"
-        className="mt-10 h-72 w-full rounded-3xl object-cover"
+        className="about__photo"
       />
-      <div className="mt-12 grid gap-6 sm:grid-cols-3">
+      <div className="values">
         <Value
-          icon={<Printer className="text-cyan" />}
+          icon={<Printer className="icon-cyan" />}
           title="Impressão própria"
           text="Produzimos internamente, com revisão peça a peça."
         />
         <Value
-          icon={<ShieldCheck className="text-purple" />}
+          icon={<ShieldCheck className="icon-purple" />}
           title="Qualidade visível"
           text="Camadas controladas, lixamento e pintura quando o design pede."
         />
         <Value
-          icon={<Truck className="text-cyan-bright" />}
+          icon={<Truck className="icon-cyan-bright" />}
           title="Envio cuidadoso"
           text="Embalamos como colecionável: proteção, nota e rastreio."
         />
@@ -47,10 +47,10 @@ function Value({
   text: string;
 }) {
   return (
-    <div className="card-surface rounded-2xl p-5">
-      <div className="mb-3">{icon}</div>
-      <h3 className="font-semibold">{title}</h3>
-      <p className="mt-1 text-sm text-muted">{text}</p>
+    <div className="value-card card-surface">
+      <div className="value-card__icon">{icon}</div>
+      <h3>{title}</h3>
+      <p>{text}</p>
     </div>
   );
 }

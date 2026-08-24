@@ -41,31 +41,29 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line bg-[#07070f]/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-[72px] max-w-7xl items-center gap-6 px-5">
-        <Link to="/" className="flex shrink-0 items-center gap-2.5">
+    <header className="site-header">
+      <div className="site-header__bar">
+        <Link to="/" className="brand">
           <Logo />
-          <span className="text-[17px] font-semibold tracking-tight">3D Store</span>
+          <span className="brand__name">3D Store</span>
         </Link>
 
-        <nav className="hidden items-center gap-6 text-sm text-muted lg:flex">
+        <nav className="site-nav">
           {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === "/"}
-              className={({ isActive }) =>
-                `transition hover:text-white ${isActive ? "text-white" : ""}`
-              }
+              className={({ isActive }) => `nav-link${isActive ? " is-active" : ""}`}
             >
               {item.label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="relative mx-auto hidden min-w-0 flex-1 md:block" ref={box}>
+        <div className="search" ref={box}>
           <form onSubmit={onSearch}>
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Search className="search__icon" />
             <input
               value={query}
               onChange={(e) => {
@@ -74,19 +72,19 @@ export function Header() {
               }}
               onFocus={() => setOpen(true)}
               placeholder="O que você procura?"
-              className="h-10 w-full rounded-xl border border-line bg-[#101018] pl-10 pr-4 text-sm text-white outline-none placeholder:text-muted/80 focus:border-purple/50"
+              className="search__input"
             />
           </form>
           {open && results.length > 0 && (
-            <div className="absolute top-[calc(100%+8px)] w-full overflow-hidden rounded-xl border border-line bg-[#12121c] shadow-2xl">
+            <div className="search__results">
               {results.map((p) => (
                 <Link
                   key={p.id}
                   to={`/produto/${p.id}`}
                   onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-white/5"
+                  className="search__result"
                 >
-                  <img src={p.image} alt="" className="h-10 w-10 rounded-lg object-cover object-top" />
+                  <img src={p.image} alt="" className="search__thumb" />
                   <span>{p.name}</span>
                 </Link>
               ))}
@@ -94,63 +92,43 @@ export function Header() {
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-2 sm:gap-3">
+        <div className="site-header__actions">
           <button
             type="button"
             onClick={() => setLang((l) => (l === "pt" ? "en" : "pt"))}
-            className="hidden h-10 w-10 items-center justify-center rounded-full text-muted transition hover:bg-white/5 hover:text-white sm:flex"
+            className="icon-btn"
             aria-label="Idioma"
             title={lang === "pt" ? "Português" : "English"}
           >
             <Globe size={18} />
           </button>
 
-          <Link
-            to="/carrinho"
-            className="relative flex h-10 w-10 items-center justify-center rounded-full text-purple hover:bg-white/5"
-            aria-label="Carrinho"
-          >
+          <Link to="/carrinho" className="cart-btn" aria-label="Carrinho">
             <ShoppingCart size={20} />
-            {count > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-purple px-1 text-[10px] font-bold">
-                {count}
-              </span>
-            )}
+            {count > 0 && <span className="cart-badge">{count}</span>}
           </Link>
 
           {user ? (
-            <div className="flex items-center gap-2">
-              <span className="hidden max-w-[120px] truncate text-sm text-muted md:inline">
-                {user.name}
-              </span>
-              <button
-                type="button"
-                onClick={logout}
-                className="rounded-xl border border-line px-3 py-2 text-sm text-muted hover:text-white"
-              >
+            <div className="user-chip">
+              <span className="user-chip__name">{user.name}</span>
+              <button type="button" onClick={logout} className="btn-outline">
                 Sair
               </button>
             </div>
           ) : (
             <>
-              <Link
-                to="/entrar"
-                className="hidden items-center gap-1.5 px-2 text-sm text-white/90 hover:text-white sm:flex"
-              >
+              <Link to="/entrar" className="login-link">
                 <UserRound size={16} />
                 Entrar
               </Link>
-              <Link
-                to="/cadastro"
-                className="btn-primary hidden rounded-xl px-4 py-2 text-sm font-semibold sm:inline-flex"
-              >
+              <Link to="/cadastro" className="btn-primary btn-primary--sm signup-link">
                 Cadastre-se
               </Link>
             </>
           )}
           <button
             type="button"
-            className="grid h-10 w-10 place-items-center rounded-full text-white lg:hidden"
+            className="menu-toggle"
             onClick={() => setMobile((v) => !v)}
             aria-label={mobile ? "Fechar menu" : "Abrir menu"}
           >
@@ -159,42 +137,36 @@ export function Header() {
         </div>
       </div>
       {mobile && (
-        <div className="border-t border-line bg-[#07070f] px-5 py-4 lg:hidden">
+        <div className="mobile-panel">
           <form
             onSubmit={(e) => {
               onSearch(e);
               setMobile(false);
             }}
-            className="relative mb-4"
+            className="mobile-search"
           >
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Search className="search__icon" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="O que você procura?"
-              className="h-10 w-full rounded-xl border border-line bg-[#101018] pl-10 pr-4 text-sm outline-none"
+              className="search__input"
             />
           </form>
-          <nav className="flex flex-col gap-1 text-sm">
+          <nav className="mobile-nav">
             {nav.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === "/"}
                 onClick={() => setMobile(false)}
-                className={({ isActive }) =>
-                  `rounded-lg px-2 py-2 ${isActive ? "bg-white/5 text-white" : "text-muted"}`
-                }
+                className={({ isActive }) => `nav-link-mobile${isActive ? " is-active" : ""}`}
               >
                 {item.label}
               </NavLink>
             ))}
             {!user && (
-              <Link
-                to="/entrar"
-                onClick={() => setMobile(false)}
-                className="rounded-lg px-2 py-2 text-muted"
-              >
+              <Link to="/entrar" onClick={() => setMobile(false)} className="nav-link-mobile">
                 Entrar
               </Link>
             )}
