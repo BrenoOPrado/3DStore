@@ -94,9 +94,9 @@ export function CartPage() {
           <span>Total</span>
           <span>{formatPrice(subtotal)}</span>
         </div>
-        <button type="button" className="btn-primary mt-6 w-full rounded-xl py-3 text-sm font-semibold">
+        <Link to="/checkout" className="btn-primary mt-6 block w-full rounded-xl py-3 text-center text-sm font-semibold">
           Finalizar compra
-        </button>
+        </Link>
         <Link to="/catalogo" className="mt-3 block text-center text-sm text-muted hover:text-white">
           Continuar comprando
         </Link>

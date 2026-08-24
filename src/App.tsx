@@ -8,6 +8,8 @@ import { ReleasesPage } from "./pages/ReleasesPage";
 import { AboutPage } from "./pages/AboutPage";
 import { ProductPage } from "./pages/ProductPage";
 import { CartPage } from "./pages/CartPage";
+import { CheckoutPage } from "./pages/CheckoutPage";
+import { OrderSuccessPage } from "./pages/OrderSuccessPage";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
 
 export default function App() {
@@ -23,6 +25,8 @@ export default function App() {
               <Route path="/sobre" element={<AboutPage />} />
               <Route path="/produto/:id" element={<ProductPage />} />
               <Route path="/carrinho" element={<CartPage />} />
+              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/pedido-confirmado" element={<OrderSuccessPage />} />
               <Route path="/entrar" element={<LoginPage />} />
               <Route path="/cadastro" element={<SignupPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
