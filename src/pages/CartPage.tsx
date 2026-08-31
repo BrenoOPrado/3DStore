@@ -2,9 +2,11 @@ import { Link } from "react-router-dom";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { formatPrice } from "../data/products";
 import { useCart } from "../context/CartContext";
+import { useStore } from "../context/StoreContext";
 
 export function CartPage() {
   const { detailed, setQty, remove, subtotal, clear, count } = useCart();
+  const { user } = useStore();
 
   if (count === 0) {
     return (
@@ -85,8 +87,12 @@ export function CartPage() {
           <span>Total</span>
           <span>{formatPrice(subtotal)}</span>
         </div>
-        <Link to="/checkout" className="btn-primary btn-primary--block">
-          Finalizar compra
+        <Link
+          to={user ? "/checkout" : "/entrar"}
+          state={user ? undefined : { from: "/checkout" }}
+          className="btn-primary btn-primary--block"
+        >
+          {user ? "Finalizar compra" : "Entrar para finalizar"}
         </Link>
         <Link to="/catalogo" className="summary__back">
           Continuar comprando

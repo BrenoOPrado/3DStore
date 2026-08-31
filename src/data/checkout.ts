@@ -68,6 +68,34 @@ export function maskCard(value: string) {
   return d.replace(/(\d{4})(?=\d)/g, "$1 ").trim();
 }
 
+/** Digits only; always `0,00` with a fixed comma and two decimal places. */
+export function maskMoney(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 9);
+  if (!digits) return "";
+  const padded = digits.padStart(3, "0");
+  const intPart = padded.slice(0, -2).replace(/^0+(?=\d)/, "") || "0";
+  return `${intPart},${padded.slice(-2)}`;
+}
+
+export function parseMoney(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return 0;
+  return Number(digits) / 100;
+}
+
+export function formatMoneyInput(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return maskMoney(String(Math.round(value * 100)));
+}
+
+export function moneyKeyDown(e: { key: string; ctrlKey: boolean; metaKey: boolean; preventDefault: () => void }) {
+  if (e.ctrlKey || e.metaKey) return;
+  if (["Backspace", "Delete", "Tab", "ArrowLeft", "ArrowRight", "Home", "End", "Enter"].includes(e.key)) {
+    return;
+  }
+  if (!/^\d$/.test(e.key)) e.preventDefault();
+}
+
 export function calculateShipping(cep: string): ShippingOption[] {
   const digits = cep.replace(/\D/g, "");
   if (digits.length < 8) return [];

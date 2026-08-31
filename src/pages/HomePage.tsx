@@ -1,14 +1,16 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Printer, Sparkles, Star } from "lucide-react";
-import { categories, products } from "../data/products";
+import { categories } from "../data/products";
 import { ProductCard } from "../components/ProductCard";
 import { CategoryGlyph } from "../components/CategoryGlyph";
+import { useStore } from "../context/StoreContext";
 
 const HERO_IMG =
   "https://images.unsplash.com/photo-1612815154858-961fe0a6f8a2?auto=format&fit=crop&w=1600&q=80";
 
 export function HomePage() {
-  const featured = products.filter((p) => p.featured);
+  const { catalog } = useStore();
+  const featured = catalog.filter((p) => p.featured);
 
   return (
     <div>

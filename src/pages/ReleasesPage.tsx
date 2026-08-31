@@ -1,8 +1,9 @@
-import { products } from "../data/products";
 import { ProductCard } from "../components/ProductCard";
+import { useStore } from "../context/StoreContext";
 
 export function ReleasesPage() {
-  const list = products.filter((p) => p.isNew);
+  const { catalog } = useStore();
+  const list = catalog.filter((p) => p.isNew);
   return (
     <div className="page releases">
       <p className="eyebrow">Novidades</p>

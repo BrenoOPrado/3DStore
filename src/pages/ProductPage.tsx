@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Minus, Plus, ShoppingCart, Star } from "lucide-react";
-import { categories, formatPrice, getProduct, productImageClass, products } from "../data/products";
+import { categories, formatPrice, productImageClass } from "../data/products";
 import { useCart } from "../context/CartContext";
+import { useStore } from "../context/StoreContext";
 import { ProductCard } from "../components/ProductCard";
 
 export function ProductPage() {
   const { id } = useParams();
-  const product = id ? getProduct(id) : undefined;
+  const { catalog, user } = useStore();
+  const product = id ? catalog.find((p) => p.id === id) : undefined;
   const { add } = useCart();
   const navigate = useNavigate();
   const [qty, setQty] = useState(1);
@@ -32,13 +34,18 @@ export function ProductPage() {
     );
   }
 
-  const related = products
+  const related = catalog
     .filter((p) => p.category === product.category && p.id !== product.id)
     .slice(0, 3);
   const category = categories.find((c) => c.id === product.category);
+  const canBuy = Boolean(user);
 
   const addToCart = () => {
-    add(product.id, color || product.colors[0], qty);
+    if (!user) {
+      navigate("/entrar", { state: { from: `/produto/${product.id}` } });
+      return;
+    }
+    if (!add(product.id, color || product.colors[0], qty)) return;
     setAdded(true);
   };
 
@@ -106,9 +113,12 @@ export function ProductPage() {
             </div>
             <button type="button" onClick={addToCart} className="btn-primary btn-primary--grow">
               <ShoppingCart size={16} />
-              Adicionar ao carrinho
+              {canBuy ? "Adicionar ao carrinho" : "Entrar para adicionar"}
             </button>
           </div>
+          {!user && (
+            <p className="muted">Entre na sua conta para colocar itens no carrinho.</p>
+          )}
           {added && (
             <div className="added-banner">
               Adicionado.

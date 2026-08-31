@@ -1,10 +1,14 @@
 import { Link } from "react-router-dom";
 import { CheckCircle2, Package } from "lucide-react";
 import { formatPrice } from "../data/products";
-import { loadLastOrder } from "../data/checkout";
+import { useStore } from "../context/StoreContext";
+import { formatAddress } from "../data/commerce";
 
 export function OrderSuccessPage() {
-  const order = loadLastOrder();
+  const { lastOrderId, orders, user } = useStore();
+  const order =
+    orders.find((o) => o.id === lastOrderId) ??
+    orders.find((o) => o.customerId === user?.id);
 
   if (!order) {
     return (
@@ -28,10 +32,10 @@ export function OrderSuccessPage() {
       <div className="success__hero">
         <CheckCircle2 className="icon-cyan" size={56} strokeWidth={1.5} />
         <p className="success__kicker">Pedido {order.id}</p>
-        <h1>Obrigado pela sua compra!</h1>
+        <h1>Pedido em aberto</h1>
         <p className="success__lead">
-          {order.recipient}, recebemos o seu pedido. Esta é uma confirmação de demonstração —
-          nenhum pagamento real foi processado.
+          {order.customerName}, recebemos o pedido. Quando o ateliê processar, o sistema confirma o
+          pagamento automaticamente.
         </p>
       </div>
 
@@ -42,7 +46,7 @@ export function OrderSuccessPage() {
         </h2>
         <ul className="success-items">
           {order.items.map((item) => (
-            <li key={`${item.name}-${item.color}`} className="success-item">
+            <li key={item.id} className="success-item">
               <img src={item.image} alt="" />
               <div className="success-item__info">
                 <p>{item.name}</p>
@@ -61,7 +65,13 @@ export function OrderSuccessPage() {
           </p>
           <p>
             <span>Frete ({order.shipping.name})</span>
-            <span>{order.shipping.price === 0 ? "Grátis" : formatPrice(order.shipping.price)}</span>
+            <span>
+              {order.shippingPrice === 0 ? "Grátis" : formatPrice(order.shippingPrice)}
+            </span>
+          </p>
+          <p>
+            <span>Cupons</span>
+            <span>−{formatPrice(order.discount)}</span>
           </p>
           <p className="success__grand">
             <span>Total</span>
@@ -73,22 +83,25 @@ export function OrderSuccessPage() {
       <section className="success__meta">
         <div className="success__box card-surface">
           <p>Entrega</p>
-          <p className="muted">{order.address}</p>
+          <p className="muted pre-line">{formatAddress(order.address)}</p>
           <p className="success__eta">{delivery}</p>
         </div>
         <div className="success__box card-surface">
           <p>Pagamento</p>
-          <p className="muted">{order.paymentLabel}</p>
-          <p className="muted">Um e-mail fictício seria enviado para confirmar.</p>
+          {order.payments.map((p) => (
+            <p key={p.cardId} className="muted">
+              {p.brand} •••• {p.last4} · {formatPrice(p.amount)}
+            </p>
+          ))}
         </div>
       </section>
 
       <div className="success__actions">
-        <Link to="/catalogo" className="btn-primary">
-          Continuar comprando
+        <Link to={`/conta/pedidos/${order.id}`} className="btn-primary">
+          Consultar pedido
         </Link>
-        <Link to="/" className="btn-ghost">
-          Voltar ao início
+        <Link to="/catalogo" className="btn-ghost">
+          Continuar comprando
         </Link>
       </div>
     </div>

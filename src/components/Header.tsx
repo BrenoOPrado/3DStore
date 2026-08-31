@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { Globe, Menu, Search, ShoppingCart, UserRound, X } from "lucide-react";
+import { Menu, Search, ShoppingCart, UserRound, X } from "lucide-react";
 import { Logo } from "./Logo";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
+import { useStore } from "../context/StoreContext";
 import { searchProducts } from "../data/products";
 
 const nav = [
@@ -16,14 +17,14 @@ const nav = [
 export function Header() {
   const { count } = useCart();
   const { user, logout } = useAuth();
+  const { catalog } = useStore();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [mobile, setMobile] = useState(false);
-  const [lang, setLang] = useState<"pt" | "en">("pt");
   const box = useRef<HTMLDivElement>(null);
 
-  const results = query.trim().length > 1 ? searchProducts(query).slice(0, 6) : [];
+  const results = query.trim().length > 1 ? searchProducts(query, catalog).slice(0, 6) : [];
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -93,16 +94,6 @@ export function Header() {
         </div>
 
         <div className="site-header__actions">
-          <button
-            type="button"
-            onClick={() => setLang((l) => (l === "pt" ? "en" : "pt"))}
-            className="icon-btn"
-            aria-label="Idioma"
-            title={lang === "pt" ? "Português" : "English"}
-          >
-            <Globe size={18} />
-          </button>
-
           <Link to="/carrinho" className="cart-btn" aria-label="Carrinho">
             <ShoppingCart size={20} />
             {count > 0 && <span className="cart-badge">{count}</span>}
@@ -110,7 +101,15 @@ export function Header() {
 
           {user ? (
             <div className="user-chip">
-              <span className="user-chip__name">{user.name}</span>
+              <Link
+                to={user.role === "admin" ? "/admin" : "/conta"}
+                className="user-chip__name"
+              >
+                {user.name}
+              </Link>
+              <Link to="/conta/pedidos" className="login-link">
+                Pedidos
+              </Link>
               <button type="button" onClick={logout} className="btn-outline">
                 Sair
               </button>
@@ -165,6 +164,21 @@ export function Header() {
                 {item.label}
               </NavLink>
             ))}
+            {user && (
+              <>
+                {user.role === "admin" && (
+                  <Link to="/admin" onClick={() => setMobile(false)} className="nav-link-mobile">
+                    Painel admin
+                  </Link>
+                )}
+                <Link to="/conta" onClick={() => setMobile(false)} className="nav-link-mobile">
+                  Minha conta
+                </Link>
+                <Link to="/conta/pedidos" onClick={() => setMobile(false)} className="nav-link-mobile">
+                  Pedidos
+                </Link>
+              </>
+            )}
             {!user && (
               <Link to="/entrar" onClick={() => setMobile(false)} className="nav-link-mobile">
                 Entrar

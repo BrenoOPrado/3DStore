@@ -1,84 +1,160 @@
-import { FormEvent, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { CreditCard, Landmark, MapPin, QrCode, Truck } from "lucide-react";
+import { CreditCard, MapPin, Ticket, Truck } from "lucide-react";
 import { formatPrice } from "../data/products";
 import { useCart } from "../context/CartContext";
-import { useAuth } from "../context/AuthContext";
+import { useStore } from "../context/StoreContext";
 import {
   calculateShipping,
-  demoAddress,
-  demoCard,
-  installmentOptions,
+  formatMoneyInput,
   maskCard,
   maskCep,
   maskPhone,
-  paymentLabel,
-  saveLastOrder,
-  type PaymentMethod,
+  maskMoney,
+  moneyKeyDown,
+  parseMoney,
 } from "../data/checkout";
+import { addressLabelTaken, couponDiscount, couponPercentSum, formatPercent, uid, type Address, type OrderItem } from "../data/commerce";
+import { Field } from "../components/Field";
+
+const blankAddress = (name: string, phone: string): Address => ({
+  id: "",
+  label: "Novo",
+  recipient: name,
+  phone,
+  cep: "",
+  street: "",
+  number: "",
+  complement: "",
+  neighborhood: "",
+  city: "",
+  state: "",
+});
 
 export function CheckoutPage() {
   const { detailed, subtotal, count, clear } = useCart();
-  const { user } = useAuth();
+  const { user, myCoupons, addCard, placeOrder } = useStore();
   const navigate = useNavigate();
 
-  const [address, setAddress] = useState({
-    ...demoAddress,
-    name: user?.name || demoAddress.name,
-    email: user?.email || demoAddress.email,
-  });
+  const [addressId, setAddressId] = useState(user?.addresses[0]?.id ?? "new");
+  const [newAddr, setNewAddr] = useState(blankAddress(user?.name ?? "", user?.phone ?? ""));
+  const [saveAddr, setSaveAddr] = useState(true);
   const [shippingId, setShippingId] = useState<"pac" | "sedex" | "retirada">("pac");
-  const [method, setMethod] = useState<PaymentMethod>("credit");
-  const [card, setCard] = useState(demoCard);
-  const [installments, setInstallments] = useState(1);
-
+  const [couponSel, setCouponSel] = useState<string[]>([]);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponMsg, setCouponMsg] = useState<string | null>(null);
+  const [cardSel, setCardSel] = useState<Record<string, string>>({});
+  const [addingCard, setAddingCard] = useState(false);
+  const [cardForm, setCardForm] = useState({ holder: "", number: "", expiry: "", cvv: "" });
+  const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+
+  const usingSaved = addressId !== "new" && user?.addresses.some((a) => a.id === addressId);
+  const address = usingSaved ? user!.addresses.find((a) => a.id === addressId)! : newAddr;
 
   const options = useMemo(() => calculateShipping(address.cep), [address.cep]);
   const shipping = options.find((o) => o.id === shippingId) ?? options[0];
   const shippingPrice = shipping?.price ?? 0;
-  const total = subtotal + shippingPrice;
-  const parcels = installmentOptions(total);
-  const selectedParcel = parcels.find((p) => p.n === installments) ?? parcels[0];
 
+  const coupons = myCoupons.filter((c) => couponSel.includes(c.code));
+  const discount = couponDiscount(subtotal, coupons);
+  const discountPercent = couponPercentSum(coupons);
+  const total = Math.max(0, Math.round((subtotal + shippingPrice - discount) * 100) / 100);
+
+  const selectedPays = Object.entries(cardSel)
+    .map(([cardId, amount]) => ({ cardId, amount: parseMoney(amount) }))
+    .filter((p) => p.amount > 0);
+  const paySum = Math.round(selectedPays.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+
+  if (!user) return <Navigate to="/entrar" replace state={{ from: "/checkout" }} />;
   if (count === 0 && !placing) return <Navigate to="/carrinho" replace />;
 
-  const set =
-    (key: keyof typeof address) =>
-    (value: string) =>
-      setAddress((prev) => ({ ...prev, [key]: value }));
+  const setAddr = (key: keyof Address) => (value: string) =>
+    setNewAddr((p) => ({ ...p, [key]: value }));
+
+  const applyCoupon = () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      setCouponMsg("Digite o código do cupom.");
+      return;
+    }
+    const found = myCoupons.find((c) => c.code.toUpperCase() === code);
+    if (!found) {
+      setCouponMsg("Cupom inválido ou indisponível.");
+      return;
+    }
+    if (couponSel.includes(found.code)) {
+      setCouponMsg("Este cupom já foi aplicado.");
+      return;
+    }
+    setCouponSel((prev) => [...prev, found.code]);
+    setCouponCode("");
+    setCouponMsg(null);
+  };
+
+  const removeCoupon = (code: string) => {
+    setCouponSel((prev) => prev.filter((c) => c !== code));
+  };
+
+  const splitEven = () => {
+    const ids = user.cards.map((c) => c.id);
+    if (!ids.length || total <= 0) return;
+    const n = ids.length;
+    const base = Math.floor((total / n) * 100) / 100;
+    const rest = Math.round((total - base * (n - 1)) * 100) / 100;
+    const next: Record<string, string> = {};
+    ids.forEach((id, i) => {
+      next[id] = formatMoneyInput(i === n - 1 ? rest : base);
+    });
+    setCardSel(next);
+  };
+
+  const onAddCard = () => {
+    const card = addCard({
+      holder: cardForm.holder,
+      number: cardForm.number,
+      expiry: cardForm.expiry,
+    });
+    setCardSel((p) => ({ ...p, [card.id]: formatMoneyInput(total) }));
+    setAddingCard(false);
+    setCardForm({ holder: "", number: "", expiry: "", cvv: "" });
+  };
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!shipping) return;
+    if (!shipping) return setError("Informe um CEP válido para o frete.");
 
-    const orderId = `3DS-${Date.now().toString().slice(-6)}`;
+    const items: OrderItem[] = detailed.map((item) => ({
+      id: uid("oi"),
+      productId: item.product.id,
+      name: item.product.name,
+      color: item.color,
+      quantity: item.quantity,
+      unitPrice: item.product.price,
+      line: item.line,
+      image: item.product.image,
+      category: item.product.category,
+    }));
+
+    const addr: Address = usingSaved ? address : { ...newAddr, id: uid("addr") };
+    if (!usingSaved && saveAddr && addressLabelTaken(user.addresses, addr.label)) {
+      setError("Já existe um endereço com esse apelido.");
+      return;
+    }
     setPlacing(true);
-    saveLastOrder({
-      id: orderId,
-      createdAt: new Date().toISOString(),
-      items: detailed.map((item) => ({
-        name: item.product.name,
-        color: item.color,
-        quantity: item.quantity,
-        line: item.line,
-        image: item.product.image,
-      })),
-      recipient: address.name,
-      address: [
-        `${address.street}, ${address.number}${address.complement ? ` — ${address.complement}` : ""}`,
-        `${address.neighborhood} · ${address.city}/${address.state}`,
-        `CEP ${address.cep}`,
-      ].join("\n"),
+    const result = placeOrder({
+      address: addr,
+      saveAddress: !usingSaved && saveAddr,
       shipping,
-      paymentLabel: paymentLabel(
-        method,
-        selectedParcel?.n ?? 1,
-        selectedParcel ? selectedParcel.amount / selectedParcel.n : total
-      ),
-      subtotal,
-      total: selectedParcel?.amount ?? total,
+      couponCodes: couponSel,
+      payments: selectedPays,
+      items,
     });
+    if (typeof result !== "string") {
+      setPlacing(false);
+      setError(result.error);
+      return;
+    }
     clear();
     navigate("/pedido-confirmado");
   };
@@ -90,7 +166,7 @@ export function CheckoutPage() {
           <p className="eyebrow">Checkout</p>
           <h1 className="page-title">Finalizar compra</h1>
           <p className="page-lead">
-            Dados de demonstração já preenchidos. Altere o CEP para recalcular o frete.
+            Escolha endereço, cupons e um ou mais cartões. A soma dos cartões deve cobrir o total.
           </p>
         </div>
 
@@ -99,22 +175,64 @@ export function CheckoutPage() {
             <MapPin size={18} className="icon-cyan" />
             Endereço de entrega
           </h2>
-          <div className="form-grid">
-            <Field label="Nome" value={address.name} onChange={set("name")} wide />
-            <Field label="E-mail" type="email" value={address.email} onChange={set("email")} />
-            <Field
-              label="Telefone"
-              value={address.phone}
-              onChange={(v) => set("phone")(maskPhone(v))}
-            />
-            <Field label="CEP" value={address.cep} onChange={(v) => set("cep")(maskCep(v))} />
-            <Field label="Estado" value={address.state} onChange={set("state")} />
-            <Field label="Rua" value={address.street} onChange={set("street")} wide />
-            <Field label="Número" value={address.number} onChange={set("number")} />
-            <Field label="Complemento" value={address.complement} onChange={set("complement")} />
-            <Field label="Bairro" value={address.neighborhood} onChange={set("neighborhood")} />
-            <Field label="Cidade" value={address.city} onChange={set("city")} />
+          <div className="chip-row">
+            {user.addresses.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className={`chip${addressId === a.id ? " is-active" : ""}`}
+                onClick={() => setAddressId(a.id)}
+              >
+                {a.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className={`chip${addressId === "new" ? " is-active" : ""}`}
+              onClick={() => setAddressId("new")}
+            >
+              Novo endereço
+            </button>
           </div>
+          {usingSaved ? (
+            <p className="pre-line muted">{`${address.recipient}\n${address.street}, ${address.number}\n${address.city}/${address.state} · ${address.cep}`}</p>
+          ) : (
+            <>
+              <div className="form-grid">
+                <Field label="Apelido" value={newAddr.label} onChange={setAddr("label")} />
+                <Field label="Destinatário" value={newAddr.recipient} onChange={setAddr("recipient")} />
+                <Field
+                  label="Telefone"
+                  value={newAddr.phone}
+                  onChange={(v) => setAddr("phone")(maskPhone(v))}
+                />
+                <Field label="CEP" value={newAddr.cep} onChange={(v) => setAddr("cep")(maskCep(v))} />
+                <Field label="Estado" value={newAddr.state} onChange={setAddr("state")} />
+                <Field label="Rua" value={newAddr.street} onChange={setAddr("street")} wide />
+                <Field label="Número" value={newAddr.number} onChange={setAddr("number")} />
+                <Field
+                  label="Complemento"
+                  value={newAddr.complement}
+                  onChange={setAddr("complement")}
+                  required={false}
+                />
+                <Field
+                  label="Bairro"
+                  value={newAddr.neighborhood}
+                  onChange={setAddr("neighborhood")}
+                />
+                <Field label="Cidade" value={newAddr.city} onChange={setAddr("city")} />
+              </div>
+              <label className="check-line">
+                <input
+                  type="checkbox"
+                  checked={saveAddr}
+                  onChange={(e) => setSaveAddr(e.target.checked)}
+                />
+                Salvar este endereço na conta
+              </label>
+            </>
+          )}
         </section>
 
         <section className="panel card-surface">
@@ -123,7 +241,7 @@ export function CheckoutPage() {
             Frete
           </h2>
           {options.length === 0 ? (
-            <p className="muted">Informe um CEP válido com 8 dígitos para calcular o frete.</p>
+            <p className="muted">Informe um CEP válido com 8 dígitos.</p>
           ) : (
             <ul className="option-list">
               {options.map((opt) => (
@@ -153,89 +271,117 @@ export function CheckoutPage() {
 
         <section className="panel card-surface">
           <h2 className="panel__title">
-            <CreditCard size={18} className="icon-cyan" />
-            Pagamento
+            <Ticket size={18} className="icon-cyan" />
+            Cupons de troca e promocionais
           </h2>
-          <div className="pay-grid">
-            <PayOption
-              active={method === "credit"}
-              onClick={() => setMethod("credit")}
-              icon={<CreditCard size={16} />}
-              label="Cartão"
+          <p className="muted">Digite o código. O desconto é em porcentagem sobre o subtotal.</p>
+          <div className="coupon-apply">
+            <Field
+              label="Código do cupom"
+              value={couponCode}
+              onChange={(v) => {
+                setCouponCode(v);
+                setCouponMsg(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applyCoupon();
+                }
+              }}
+              required={false}
+              placeholder="PRINT10"
             />
-            <PayOption
-              active={method === "pix"}
-              onClick={() => setMethod("pix")}
-              icon={<QrCode size={16} />}
-              label="Pix"
-            />
-            <PayOption
-              active={method === "boleto"}
-              onClick={() => setMethod("boleto")}
-              icon={<Landmark size={16} />}
-              label="Boleto"
-            />
+            <button type="button" className="btn-primary" onClick={applyCoupon}>
+              Aplicar
+            </button>
           </div>
+          {couponMsg && <p className="form-error">{couponMsg}</p>}
+          {coupons.length > 0 && (
+            <ul className="chip-row coupon-chips">
+              {coupons.map((c) => (
+                <li key={c.id}>
+                  <button type="button" className="chip is-active" onClick={() => removeCoupon(c.code)}>
+                    {c.code} (−{formatPercent(c.value)}) ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-          {method === "credit" && (
+        <section className="panel card-surface">
+          <h2 className="panel__title">
+            <CreditCard size={18} className="icon-cyan" />
+            Cartões
+          </h2>
+          <p className="muted">
+            Combine vários cartões. O valor restante após cupons é {formatPrice(total)}.
+          </p>
+          {user.cards.length === 0 && (
+            <p className="muted">Nenhum cartão salvo. Adicione um abaixo.</p>
+          )}
+          <ul className="option-list">
+            {user.cards.map((c) => (
+              <li key={c.id} className="pay-split">
+                <span>
+                  {c.brand} •••• {c.last4} · {c.holder}
+                </span>
+                <label className="field">
+                  <span className="field__label">Valor (R$)</span>
+                  <input
+                    className="field__control"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={cardSel[c.id] ?? ""}
+                    onChange={(e) => setCardSel((p) => ({ ...p, [c.id]: maskMoney(e.target.value) }))}
+                    onKeyDown={moneyKeyDown}
+                    placeholder="0,00"
+                  />
+                </label>
+              </li>
+            ))}
+          </ul>
+          <div className="account-actions wrap">
+            <button type="button" className="btn-ghost" onClick={splitEven}>
+              Dividir igualmente
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => setAddingCard((v) => !v)}>
+              Adicionar novo cartão
+            </button>
+          </div>
+          {addingCard && (
             <div className="form-grid">
               <Field
                 label="Nome no cartão"
-                value={card.holder}
-                onChange={(v) => setCard((c) => ({ ...c, holder: v }))}
+                value={cardForm.holder}
+                onChange={(v) => setCardForm((f) => ({ ...f, holder: v }))}
                 wide
               />
               <Field
                 label="Número"
-                value={card.number}
-                onChange={(v) => setCard((c) => ({ ...c, number: maskCard(v) }))}
+                value={cardForm.number}
+                onChange={(v) => setCardForm((f) => ({ ...f, number: maskCard(v) }))}
                 wide
               />
               <Field
                 label="Validade"
-                value={card.expiry}
-                onChange={(v) => setCard((c) => ({ ...c, expiry: v }))}
+                value={cardForm.expiry}
+                onChange={(v) => setCardForm((f) => ({ ...f, expiry: v }))}
               />
               <Field
                 label="CVV"
-                value={card.cvv}
-                onChange={(v) => setCard((c) => ({ ...c, cvv: v.replace(/\D/g, "").slice(0, 4) }))}
+                value={cardForm.cvv}
+                onChange={(v) => setCardForm((f) => ({ ...f, cvv: v.replace(/\D/g, "").slice(0, 4) }))}
               />
-              <label className="field field--wide">
-                <span className="field__label">Parcelamento</span>
-                <select
-                  value={installments}
-                  onChange={(e) => setInstallments(Number(e.target.value))}
-                  className="field__control"
-                >
-                  {parcels.map((p) => (
-                    <option key={p.n} value={p.n}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <button type="button" className="btn-primary" onClick={onAddCard}>
+                Salvar cartão
+              </button>
             </div>
           )}
-
-          {method === "pix" && (
-            <div className="notice">
-              <p>Após confirmar, um QR Code de demonstração será gerado.</p>
-              <p className="notice__code">0002012633...BR.GOV.BCB.PIX...3DSTORE...6304A1B2</p>
-              <p>Aprovação em poucos segundos. Sem parcelamento.</p>
-            </div>
-          )}
-
-          {method === "boleto" && (
-            <div className="notice">
-              <p>O boleto de demonstração vence em 3 dias úteis.</p>
-              <p className="notice__code notice__code--wide">
-                23791.22928 60000.000003 00000.000400 1 844700000{Math.round(total * 100)
-                  .toString()
-                  .padStart(8, "0")}
-              </p>
-            </div>
-          )}
+          <p className={Math.abs(paySum - total) < 0.05 ? "form-ok" : "muted"}>
+            Alocado em cartões: {formatPrice(paySum)} / {formatPrice(total)}
+          </p>
         </section>
       </div>
 
@@ -256,21 +402,24 @@ export function CheckoutPage() {
           ))}
         </ul>
         <div className="summary__rows">
-          <Row label="Subtotal" value={formatPrice(subtotal)} />
-          <Row
-            label="Frete"
-            value={shipping ? (shipping.price === 0 ? "Grátis" : formatPrice(shipping.price)) : "—"}
-          />
+          <div className="summary__row">
+            <span>Subtotal</span>
+            <span>{formatPrice(subtotal)}</span>
+          </div>
+          <div className="summary__row">
+            <span>Frete</span>
+            <span>{shippingPrice === 0 ? "Grátis" : formatPrice(shippingPrice)}</span>
+          </div>
+          <div className="summary__row">
+            <span>Cupons{discountPercent ? ` (−${formatPercent(discountPercent)})` : ""}</span>
+            <span>−{formatPrice(discount)}</span>
+          </div>
         </div>
         <div className="summary__total">
           <span>Total</span>
-          <span>
-            {formatPrice(selectedParcel && method === "credit" ? selectedParcel.amount : total)}
-          </span>
+          <span>{formatPrice(total)}</span>
         </div>
-        {method === "credit" && selectedParcel && selectedParcel.n > 1 && (
-          <p className="parcel-note">{selectedParcel.label}</p>
-        )}
+        {error && <p className="form-error">{error}</p>}
         <button type="submit" className="btn-primary btn-primary--block">
           Confirmar pedido
         </button>
@@ -279,64 +428,5 @@ export function CheckoutPage() {
         </Link>
       </aside>
     </form>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="summary__row">
-      <span>{label}</span>
-      <span>{value}</span>
-    </div>
-  );
-}
-
-function PayOption({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`pay-option${active ? " is-active" : ""}`}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  type = "text",
-  wide = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  wide?: boolean;
-}) {
-  return (
-    <label className={wide ? "field field--wide" : "field"}>
-      <span className="field__label">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={label !== "Complemento"}
-        className="field__control"
-      />
-    </label>
   );
 }

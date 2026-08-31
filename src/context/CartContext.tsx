@@ -5,7 +5,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { getProduct, type Product } from "../data/products";
+import { type Product } from "../data/products";
+import { useStore } from "./StoreContext";
 
 export type CartItem = {
   productId: string;
@@ -15,7 +16,7 @@ export type CartItem = {
 
 type CartContextValue = {
   items: CartItem[];
-  add: (productId: string, color: string, quantity?: number) => void;
+  add: (productId: string, color: string, quantity?: number) => boolean;
   remove: (productId: string, color: string) => void;
   setQty: (productId: string, color: string, quantity: number) => void;
   clear: () => void;
@@ -38,6 +39,7 @@ function load(): CartItem[] {
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
+  const { catalog, user } = useStore();
   const [items, setItems] = useState<CartItem[]>(load);
 
   const persist = (next: CartItem[]) => {
@@ -47,11 +49,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CartContextValue>(() => {
     const add = (productId: string, color: string, quantity = 1) => {
+      if (!user) return false;
       const next = [...items];
       const i = next.findIndex((x) => x.productId === productId && x.color === color);
       if (i >= 0) next[i] = { ...next[i], quantity: next[i].quantity + quantity };
       else next.push({ productId, color, quantity });
       persist(next);
+      return true;
     };
     const remove = (productId: string, color: string) =>
       persist(items.filter((x) => !(x.productId === productId && x.color === color)));
@@ -65,7 +69,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
     const detailed = items
       .map((item) => {
-        const product = getProduct(item.productId);
+        const product = catalog.find((p) => p.id === item.productId);
         if (!product) return null;
         return {
           product,
@@ -86,7 +90,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       subtotal: detailed.reduce((a, b) => a + b.line, 0),
       detailed,
     };
-  }, [items]);
+  }, [catalog, items, user]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

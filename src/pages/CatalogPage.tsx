@@ -1,16 +1,18 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { categories, products, type CategoryId } from "../data/products";
+import { categories, type CategoryId } from "../data/products";
 import { ProductCard } from "../components/ProductCard";
+import { useStore } from "../context/StoreContext";
 
 export function CatalogPage() {
+  const { catalog } = useStore();
   const [params, setParams] = useSearchParams();
   const category = params.get("categoria") as CategoryId | null;
   const q = params.get("q") ?? "";
   const sort = params.get("ordem") ?? "destaque";
 
   const list = useMemo(() => {
-    let items = [...products];
+    let items = [...catalog];
     if (category) items = items.filter((p) => p.category === category);
     if (q.trim()) {
       const needle = q.toLowerCase();
@@ -24,7 +26,7 @@ export function CatalogPage() {
     if (sort === "maior") items.sort((a, b) => b.price - a.price);
     if (sort === "avaliacao") items.sort((a, b) => b.rating - a.rating);
     return items;
-  }, [category, q, sort]);
+  }, [catalog, category, q, sort]);
 
   const setCategory = (id: CategoryId | "") => {
     const next = new URLSearchParams(params);

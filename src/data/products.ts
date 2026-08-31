@@ -256,18 +256,18 @@ export function formatPrice(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function getProduct(id: string) {
-  return products.find((p) => p.id === id);
+export function getProduct(id: string, list: Product[] = products) {
+  return list.find((p) => p.id === id);
 }
 
-export function getByCategory(id: CategoryId) {
-  return products.filter((p) => p.category === id);
+export function getByCategory(id: CategoryId, list: Product[] = products) {
+  return list.filter((p) => p.category === id);
 }
 
-export function searchProducts(query: string) {
+export function searchProducts(query: string, list: Product[] = products) {
   const q = query.trim().toLowerCase();
-  if (!q) return products;
-  return products.filter(
+  if (!q) return list;
+  return list.filter(
     (p) =>
       p.name.toLowerCase().includes(q) ||
       p.description.toLowerCase().includes(q) ||
