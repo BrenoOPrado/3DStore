@@ -2117,41 +2117,41 @@ textarea.field__control {
   margin: 16px 0 8px;
 }
 
-.chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  height: 220px;
-  padding-top: 12px;
-}
-
-.chart__col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-  gap: 6px;
-}
-
-.chart__bar-wrap {
-  flex: 1;
+.line-chart {
+  display: block;
   width: 100%;
-  display: flex;
-  align-items: flex-end;
+  height: auto;
+  margin-top: 8px;
+  font-family: inherit;
+  overflow: visible;
 }
 
-.chart__bar {
-  width: 100%;
-  border-radius: 8px 8px 0 0;
-  background: linear-gradient(180deg, #a78bfa, #7c3aed);
+.line-chart__grid {
+  stroke: rgba(255, 255, 255, 0.08);
 }
 
-.chart__label,
-.chart__value {
+.line-chart__tick,
+.line-chart__xlabel {
+  fill: var(--muted);
   font-size: 11px;
-  color: var(--muted);
-  text-align: center;
+}
+
+.line-chart__area {
+  fill: url(#line-fill);
+}
+
+.line-chart__line {
+  fill: none;
+  stroke: #22d3ee;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.line-chart__dot {
+  fill: #22d3ee;
+  stroke: #12121a;
+  stroke-width: 2;
 }
 
 .cat-bars {

@@ -1,12 +1,70 @@
 import { Link } from "react-router-dom";
 import { categories, formatPrice } from "../../data/products";
-import { chartFromOrders } from "../../data/commerce";
+import { chartFromOrders, type ChartPoint } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
+
+function MonthLineChart({ months }: { months: ChartPoint[] }) {
+  const w = 640;
+  const h = 280;
+  const padL = 96;
+  const padR = 20;
+  const padT = 20;
+  const padB = 44;
+  const max = Math.max(1, ...months.map((m) => m.total));
+  const innerW = w - padL - padR;
+  const innerH = h - padT - padB;
+  const n = months.length;
+  const xAt = (i: number) => padL + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+  const yAt = (v: number) => padT + innerH - (v / max) * innerH;
+  const line = months
+    .map((m, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(m.total).toFixed(1)}`)
+    .join(" ");
+  const area =
+    n === 0
+      ? ""
+      : `${line} L ${xAt(n - 1).toFixed(1)} ${(padT + innerH).toFixed(1)} L ${xAt(0).toFixed(1)} ${(padT + innerH).toFixed(1)} Z`;
+  const ticks = [1, 0.5, 0];
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="line-chart" role="img" aria-label="Receita por mês">
+      <defs>
+        <linearGradient id="line-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {ticks.map((t) => {
+        const y = yAt(max * t);
+        return (
+          <g key={t}>
+            <line className="line-chart__grid" x1={padL} x2={w - padR} y1={y} y2={y} />
+            <text className="line-chart__tick" x={padL - 8} y={y + 4} textAnchor="end">
+              {formatPrice(max * t)}
+            </text>
+          </g>
+        );
+      })}
+      {area && <path className="line-chart__area" d={area} />}
+      {n > 0 && <path className="line-chart__line" d={line} />}
+      {months.map((m, i) => (
+        <g key={m.label}>
+          <circle className="line-chart__dot" cx={xAt(i)} cy={yAt(m.total)} r="5">
+            <title>
+              {m.label}: {formatPrice(m.total)}
+            </title>
+          </circle>
+          <text className="line-chart__xlabel" x={xAt(i)} y={h - 14} textAnchor="middle">
+            {m.label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
 
 export function AdminChartPage() {
   const { orders } = useStore();
   const { months, categories: bars } = chartFromOrders(orders, categories);
-  const maxMonth = Math.max(1, ...months.map((m) => m.total));
   const maxCat = Math.max(1, ...bars.map((c) => c.total));
   const revenue = months.reduce((s, m) => s + m.total, 0);
 
@@ -21,21 +79,11 @@ export function AdminChartPage() {
 
       <section className="panel card-surface">
         <h2 className="panel__title">Receita por mês</h2>
-        <div className="chart">
-          {months.map((m) => (
-            <div key={m.label} className="chart__col">
-              <div className="chart__bar-wrap">
-                <div
-                  className="chart__bar"
-                  style={{ height: `${Math.max(6, (m.total / maxMonth) * 100)}%` }}
-                  title={formatPrice(m.total)}
-                />
-              </div>
-              <span className="chart__label">{m.label}</span>
-              <span className="chart__value">{formatPrice(m.total)}</span>
-            </div>
-          ))}
-        </div>
+        {months.length === 0 ? (
+          <p className="muted">Nenhuma venda no período.</p>
+        ) : (
+          <MonthLineChart months={months} />
+        )}
       </section>
 
       <section className="panel card-surface">
