@@ -144,6 +144,7 @@ export const STATUS_ACTION: Partial<Record<OrderStatus, string>> = {
 };
 
 export const STORE_KEY = "3dstore-commerce-v2";
+export const SESSION_KEY = "3dstore-session-id";
 
 export type CommerceState = {
   customers: Customer[];
@@ -722,14 +723,32 @@ export function loadState(): CommerceState {
     const changed = orders.some((o, i) => o.status !== parsed.orders[i]?.status);
     parsed.orders = orders;
     if (changed) saveState(parsed);
+    parsed.sessionId = readSessionId();
     return parsed;
   } catch {
     return seedState();
   }
 }
 
+export function readSessionId(): string | null {
+  try {
+    return sessionStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeSessionId(id: string | null) {
+  try {
+    if (id) sessionStorage.setItem(SESSION_KEY, id);
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function saveState(state: CommerceState) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORE_KEY, JSON.stringify({ ...state, sessionId: null }));
 }
 
 export function toPublic(c: Customer): PublicUser {

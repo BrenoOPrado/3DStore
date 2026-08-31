@@ -25,6 +25,7 @@ import {
   settlePaymentIfDue,
   toPublic,
   uid,
+  writeSessionId,
   type Address,
   type Card,
   type CommerceState,
@@ -68,7 +69,7 @@ type StoreValue = {
   }) => string | null;
   logout: () => void;
   updateProfile: (data: Partial<Pick<Customer, "name" | "phone" | "gender" | "birthDate" | "cpf">>) => string | null;
-  inactivate: () => string | null;
+  deleteAccount: () => string | null;
   setCustomerStatus: (id: string, status: CustomerStatus) => string | null;
   addAddress: (address: Omit<Address, "id">) => Address | { error: string };
   updateAddress: (address: Address) => string | null;
@@ -106,11 +107,15 @@ const CHANNEL = "3dstore-commerce";
 function persist(next: CommerceState) {
   saveState(next);
   try {
-    new BroadcastChannel(CHANNEL).postMessage(next);
+    new BroadcastChannel(CHANNEL).postMessage({ ...next, sessionId: null });
   } catch {
     /* ignore */
   }
   return next;
+}
+
+function keepSession(incoming: CommerceState, sessionId: string | null): CommerceState {
+  return { ...incoming, sessionId };
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -127,7 +132,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const onStorage = (e: StorageEvent) => {
       if (e.key !== STORE_KEY || !e.newValue) return;
       try {
-        setState(JSON.parse(e.newValue) as CommerceState);
+        const incoming = JSON.parse(e.newValue) as CommerceState;
+        setState((prev) => keepSession(incoming, prev.sessionId));
       } catch {
         /* ignore */
       }
@@ -139,7 +145,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       channel = new BroadcastChannel(CHANNEL);
       channel.onmessage = (e) => {
         if (e.data && typeof e.data === "object" && Array.isArray(e.data.orders)) {
-          setState(e.data as CommerceState);
+          setState((prev) => keepSession(e.data as CommerceState, prev.sessionId));
         }
       };
     } catch {
@@ -151,6 +157,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       channel?.close();
     };
   }, []);
+
+  useEffect(() => {
+    if (!state.sessionId) return;
+    const me = state.customers.find((c) => c.id === state.sessionId);
+    if (!me || (me.role !== "admin" && me.status === "inativo")) {
+      writeSessionId(null);
+      setState((s) => (s.sessionId ? { ...s, sessionId: null } : s));
+    }
+  }, [state.customers, state.sessionId]);
 
   const current = state.customers.find((c) => c.id === state.sessionId) ?? null;
 
@@ -165,6 +180,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (found.role !== "admin" && found.status === "inativo") {
         return "Esta conta está inativa. Fale com o ateliê.";
       }
+      writeSessionId(found.id);
       patch((s) => ({ ...s, sessionId: found.id }));
       return null;
     };
@@ -196,10 +212,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         customers: [...s.customers, customer],
         sessionId: customer.id,
       }));
+      writeSessionId(customer.id);
       return null;
     };
 
-    const logout = () => patch((s) => ({ ...s, sessionId: null }));
+    const logout = () => {
+      writeSessionId(null);
+      patch((s) => ({ ...s, sessionId: null }));
+    };
 
     const updateProfile: StoreValue["updateProfile"] = (data) => {
       if (!current) return "Entre para editar o cadastro.";
@@ -210,16 +230,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return null;
     };
 
-    const inactivate = () => {
-      if (!current) return "Entre para inativar a conta.";
-      if (current.role === "admin") return "A conta administrativa não pode ser inativada.";
+    const deleteAccount = () => {
+      if (!current) return "Entre para excluir a conta.";
+      if (current.role === "admin") return "A conta administrativa não pode ser excluída.";
+      const email = current.email.toLowerCase();
       patch((s) => ({
         ...s,
-        customers: s.customers.map((c) =>
-          c.id === current.id ? { ...c, status: "inativo" as const } : c
+        customers: s.customers.filter((c) => c.id !== current.id),
+        coupons: s.coupons.filter(
+          (c) => !(c.type === "troca" && c.ownerEmail?.toLowerCase() === email)
         ),
         sessionId: null,
       }));
+      writeSessionId(null);
       return null;
     };
 
@@ -230,7 +253,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       patch((s) => ({
         ...s,
         customers: s.customers.map((c) => (c.id === id ? { ...c, status } : c)),
-        sessionId: status === "inativo" && s.sessionId === id ? null : s.sessionId,
       }));
       return null;
     };
@@ -620,7 +642,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       signup,
       logout,
       updateProfile,
-      inactivate,
+      deleteAccount,
       setCustomerStatus,
       addAddress,
       updateAddress,

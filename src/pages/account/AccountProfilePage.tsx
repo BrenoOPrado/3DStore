@@ -2,10 +2,12 @@ import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Field } from "../../components/Field";
 import { useStore } from "../../context/StoreContext";
+import { useCart } from "../../context/CartContext";
 import { maskPhone } from "../../data/checkout";
 
 export function AccountProfilePage() {
-  const { user, updateProfile, inactivate } = useStore();
+  const { user, updateProfile, deleteAccount } = useStore();
+  const { clear } = useCart();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: user?.name ?? "",
@@ -31,11 +33,15 @@ export function AccountProfilePage() {
     setMsg(err ?? "Cadastro atualizado.");
   };
 
-  const onInactivate = () => {
-    if (!confirm("Inativar a conta? Você não poderá mais entrar até o ateliê reativá-la.")) return;
-    const err = inactivate();
-    if (err) setMsg(err);
-    else navigate("/");
+  const onDelete = () => {
+    if (!confirm("Excluir a conta? Esta ação não pode ser desfeita.")) return;
+    const err = deleteAccount();
+    if (err) {
+      setMsg(err);
+      return;
+    }
+    clear();
+    navigate("/");
   };
 
   return (
@@ -74,8 +80,8 @@ export function AccountProfilePage() {
             Salvar alterações
           </button>
           {user.role !== "admin" && (
-            <button type="button" className="btn-ghost" onClick={onInactivate}>
-              Inativar cliente
+            <button type="button" className="btn-ghost" onClick={onDelete}>
+              Excluir conta
             </button>
           )}
         </div>

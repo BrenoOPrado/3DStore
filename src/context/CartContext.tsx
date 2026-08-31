@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -27,12 +28,19 @@ type CartContextValue = {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-const STORAGE_KEY = "3dstore-cart";
+function cartKey(userId: string | null) {
+  return userId ? `3dstore-cart:${userId}` : "3dstore-cart:guest";
+}
 
-function load(): CartItem[] {
+function load(userId: string | null): CartItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as CartItem[]) : [];
+    const raw = localStorage.getItem(cartKey(userId));
+    if (raw) return JSON.parse(raw) as CartItem[];
+    if (!userId) {
+      const legacy = localStorage.getItem("3dstore-cart");
+      return legacy ? (JSON.parse(legacy) as CartItem[]) : [];
+    }
+    return [];
   } catch {
     return [];
   }
@@ -40,11 +48,16 @@ function load(): CartItem[] {
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { catalog, user } = useStore();
-  const [items, setItems] = useState<CartItem[]>(load);
+  const userId = user?.id ?? null;
+  const [items, setItems] = useState<CartItem[]>(() => load(userId));
+
+  useEffect(() => {
+    setItems(load(userId));
+  }, [userId]);
 
   const persist = (next: CartItem[]) => {
     setItems(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(cartKey(userId), JSON.stringify(next));
   };
 
   const value = useMemo<CartContextValue>(() => {
@@ -90,7 +103,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       subtotal: detailed.reduce((a, b) => a + b.line, 0),
       detailed,
     };
-  }, [catalog, items, user]);
+  }, [catalog, items, user, userId]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
