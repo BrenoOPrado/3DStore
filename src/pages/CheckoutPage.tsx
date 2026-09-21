@@ -8,27 +8,17 @@ import {
   calculateShipping,
   formatMoneyInput,
   maskCard,
-  maskCep,
-  maskPhone,
   maskMoney,
   moneyKeyDown,
   parseMoney,
 } from "../data/checkout";
 import { addressLabelTaken, couponDiscount, couponPercentSum, formatPercent, uid, type Address, type OrderItem } from "../data/commerce";
+import { AddressFields, emptyAddress } from "../components/AddressFields";
 import { Field } from "../components/Field";
 
 const blankAddress = (name: string, phone: string): Address => ({
   id: "",
-  label: "Novo",
-  recipient: name,
-  phone,
-  cep: "",
-  street: "",
-  number: "",
-  complement: "",
-  neighborhood: "",
-  city: "",
-  state: "",
+  ...emptyAddress(name, phone),
 });
 
 export function CheckoutPage() {
@@ -68,9 +58,6 @@ export function CheckoutPage() {
 
   if (!user) return <Navigate to="/entrar" replace state={{ from: "/checkout" }} />;
   if (count === 0 && !placing) return <Navigate to="/carrinho" replace />;
-
-  const setAddr = (key: keyof Address) => (value: string) =>
-    setNewAddr((p) => ({ ...p, [key]: value }));
 
   const applyCoupon = () => {
     const code = couponCode.trim().toUpperCase();
@@ -114,7 +101,12 @@ export function CheckoutPage() {
       holder: cardForm.holder,
       number: cardForm.number,
       expiry: cardForm.expiry,
+      cvv: cardForm.cvv,
     });
+    if ("error" in card) {
+      setError(card.error);
+      return;
+    }
     setCardSel((p) => ({ ...p, [card.id]: formatMoneyInput(total) }));
     setAddingCard(false);
     setCardForm({ holder: "", number: "", expiry: "", cvv: "" });
@@ -195,34 +187,13 @@ export function CheckoutPage() {
             </button>
           </div>
           {usingSaved ? (
-            <p className="pre-line muted">{`${address.recipient}\n${address.street}, ${address.number}\n${address.city}/${address.state} · ${address.cep}`}</p>
+            <p className="pre-line muted">{`${address.recipient}\n${address.streetType} ${address.street}, ${address.number}\n${address.city}/${address.state} · ${address.cep}`}</p>
           ) : (
             <>
-              <div className="form-grid">
-                <Field label="Apelido" value={newAddr.label} onChange={setAddr("label")} />
-                <Field label="Destinatário" value={newAddr.recipient} onChange={setAddr("recipient")} />
-                <Field
-                  label="Telefone"
-                  value={newAddr.phone}
-                  onChange={(v) => setAddr("phone")(maskPhone(v))}
-                />
-                <Field label="CEP" value={newAddr.cep} onChange={(v) => setAddr("cep")(maskCep(v))} />
-                <Field label="Estado" value={newAddr.state} onChange={setAddr("state")} />
-                <Field label="Rua" value={newAddr.street} onChange={setAddr("street")} wide />
-                <Field label="Número" value={newAddr.number} onChange={setAddr("number")} />
-                <Field
-                  label="Complemento"
-                  value={newAddr.complement}
-                  onChange={setAddr("complement")}
-                  required={false}
-                />
-                <Field
-                  label="Bairro"
-                  value={newAddr.neighborhood}
-                  onChange={setAddr("neighborhood")}
-                />
-                <Field label="Cidade" value={newAddr.city} onChange={setAddr("city")} />
-              </div>
+              <AddressFields
+                value={newAddr}
+                onChange={(next) => setNewAddr({ ...next, id: newAddr.id })}
+              />
               <label className="check-line">
                 <input
                   type="checkbox"

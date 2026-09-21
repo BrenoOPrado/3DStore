@@ -104,13 +104,14 @@ export function Header() {
               <Link
                 to={user.role === "admin" ? "/admin" : "/conta"}
                 className="user-chip__name"
+                data-testid="nav-account"
               >
                 {user.name}
               </Link>
               <Link to="/conta/pedidos" className="login-link">
                 Pedidos
               </Link>
-              <button type="button" onClick={logout} className="btn-outline">
+              <button type="button" onClick={logout} className="btn-outline" data-testid="logout">
                 Sair
               </button>
             </div>

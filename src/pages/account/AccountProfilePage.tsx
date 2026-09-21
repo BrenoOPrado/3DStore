@@ -1,9 +1,10 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Field } from "../../components/Field";
+import { Field, SelectField } from "../../components/Field";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
-import { maskPhone } from "../../data/checkout";
+import { maskCpf } from "../../data/checkout";
+import { PHONE_TYPES } from "../../data/customerRules";
 
 export function AccountProfilePage() {
   const { user, updateProfile, deleteAccount } = useStore();
@@ -11,10 +12,12 @@ export function AccountProfilePage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: user?.name ?? "",
-    phone: user?.phone ?? "",
+    cpf: user?.cpf ?? "",
+    phoneType: user?.phoneType ?? "celular",
+    phoneDdd: user?.phoneDdd ?? "",
+    phoneNumber: user?.phoneNumber ?? "",
     gender: user?.gender ?? "Prefiro não informar",
     birthDate: user?.birthDate ?? "",
-    cpf: user?.cpf ?? "",
   });
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -25,16 +28,12 @@ export function AccountProfilePage() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const err = updateProfile({
-      ...form,
-      phone: maskPhone(form.phone),
-      cpf: form.cpf.replace(/\D/g, ""),
-    });
+    const err = updateProfile(form);
     setMsg(err ?? "Cadastro atualizado.");
   };
 
   const onDelete = () => {
-    if (!confirm("Excluir a conta? Esta ação não pode ser desfeita.")) return;
+    if (!confirm("Excluir a conta? Esta ação remove o cadastro e não pode ser desfeita. Não é inativação.")) return;
     const err = deleteAccount();
     if (err) {
       setMsg(err);
@@ -48,43 +47,77 @@ export function AccountProfilePage() {
     <div>
       <p className="eyebrow">Cliente</p>
       <h1 className="page-title">Consultar e alterar cadastro</h1>
-      <p className="page-lead">E-mail {user.email} · situação {user.status}.</p>
+      <p className="page-lead" data-testid="profile-summary">
+        Código {user.id} · e-mail {user.email} · situação {user.status} · ranking {user.ranking}.
+      </p>
 
-      <form onSubmit={onSubmit} className="panel card-surface account-form">
+      <form onSubmit={onSubmit} className="panel card-surface account-form" noValidate>
         <div className="form-grid">
-          <Field label="Nome" value={form.name} onChange={set("name")} wide />
+          <Field label="Nome" value={form.name} onChange={set("name")} wide testId="name" required={false} />
           <Field
             label="CPF"
             value={form.cpf}
-            onChange={(v) => set("cpf")(v.replace(/\D/g, "").slice(0, 11))}
+            onChange={(v) => set("cpf")(maskCpf(v))}
+            testId="cpf"
+            required={false}
           />
-          <Field label="Telefone" value={form.phone} onChange={(v) => set("phone")(maskPhone(v))} />
-          <label className="field">
-            <span className="field__label">Gênero</span>
-            <select
-              className="field__control"
-              value={form.gender}
-              onChange={(e) => set("gender")(e.target.value)}
-            >
-              <option>Feminino</option>
-              <option>Masculino</option>
-              <option>Outro</option>
-              <option>Prefiro não informar</option>
-            </select>
-          </label>
-          <Field label="Nascimento" type="date" value={form.birthDate} onChange={set("birthDate")} />
+          <SelectField
+            label="Gênero"
+            value={form.gender}
+            onChange={set("gender")}
+            options={["Feminino", "Masculino", "Outro", "Prefiro não informar"]}
+            testId="gender"
+          />
+          <Field
+            label="Nascimento"
+            type="date"
+            value={form.birthDate}
+            onChange={set("birthDate")}
+            testId="birth-date"
+            required={false}
+          />
+          <SelectField
+            label="Tipo de telefone"
+            value={form.phoneType}
+            onChange={set("phoneType")}
+            options={[...PHONE_TYPES]}
+            testId="phone-type"
+          />
+          <Field
+            label="DDD"
+            value={form.phoneDdd}
+            onChange={(v) => set("phoneDdd")(v.replace(/\D/g, "").slice(0, 2))}
+            testId="phone-ddd"
+            required={false}
+          />
+          <Field
+            label="Telefone"
+            value={form.phoneNumber}
+            onChange={(v) => set("phoneNumber")(v.replace(/\D/g, "").slice(0, 9))}
+            testId="phone-number"
+            required={false}
+          />
         </div>
-        {msg && <p className={msg.includes("atualizado") ? "form-ok" : "form-error"}>{msg}</p>}
+        {msg && (
+          <p className={msg.includes("atualizado") ? "form-ok" : "form-error"} data-testid={msg.includes("atualizado") ? "form-ok" : "form-error"}>
+            {msg}
+          </p>
+        )}
         <div className="account-actions">
-          <button type="submit" className="btn-primary">
+          <button type="submit" className="btn-primary" data-testid="submit-profile">
             Salvar alterações
           </button>
           {user.role !== "admin" && (
-            <button type="button" className="btn-ghost" onClick={onDelete}>
+            <button type="button" className="btn-ghost" data-testid="delete-account" onClick={onDelete}>
               Excluir conta
             </button>
           )}
         </div>
+        {user.role !== "admin" && (
+          <p className="muted">
+            Excluir remove o cadastro. Inativar é feito pelo administrador e preserva os dados.
+          </p>
+        )}
       </form>
     </div>
   );

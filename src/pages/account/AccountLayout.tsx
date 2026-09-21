@@ -3,6 +3,7 @@ import { useStore } from "../../context/StoreContext";
 
 const links = [
   { to: "/conta", label: "Cadastro", end: true },
+  { to: "/conta/senha", label: "Senha" },
   { to: "/conta/enderecos", label: "Endereços" },
   { to: "/conta/cartoes", label: "Cartões" },
   { to: "/conta/cupons", label: "Cupons" },

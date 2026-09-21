@@ -2,3 +2,14 @@ node_modules
 dist
 .DS_Store
 *.local
+cypress/videos
+cypress/screenshots
+cypress/downloads
+
+# Apresentacao e Trello
+*.pptx
+*.ppt
+*trello*
+*Trello*
+docs/_pptx_extract/
+docs/pptx-screens/

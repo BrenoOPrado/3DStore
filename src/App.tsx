@@ -13,6 +13,7 @@ import { OrderSuccessPage } from "./pages/OrderSuccessPage";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
 import { AccountLayout } from "./pages/account/AccountLayout";
 import { AccountProfilePage } from "./pages/account/AccountProfilePage";
+import { AccountPasswordPage } from "./pages/account/AccountPasswordPage";
 import { AccountAddressesPage } from "./pages/account/AccountAddressesPage";
 import { AccountCardsPage } from "./pages/account/AccountCardsPage";
 import { AccountCouponsPage } from "./pages/account/AccountCouponsPage";
@@ -44,6 +45,7 @@ export default function App() {
               <Route path="/cadastro" element={<SignupPage />} />
               <Route path="/conta" element={<AccountLayout />}>
                 <Route index element={<AccountProfilePage />} />
+                <Route path="senha" element={<AccountPasswordPage />} />
                 <Route path="enderecos" element={<AccountAddressesPage />} />
                 <Route path="cartoes" element={<AccountCardsPage />} />
                 <Route path="cupons" element={<AccountCouponsPage />} />

@@ -68,6 +68,20 @@ export function maskCard(value: string) {
   return d.replace(/(\d{4})(?=\d)/g, "$1 ").trim();
 }
 
+export function maskCpf(value: string) {
+  const d = value.replace(/\D/g, "").slice(0, 11);
+  return d
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+}
+
+export function maskExpiry(value: string) {
+  const d = value.replace(/\D/g, "").slice(0, 4);
+  if (d.length <= 2) return d;
+  return `${d.slice(0, 2)}/${d.slice(2)}`;
+}
+
 /** Digits only; always `0,00` with a fixed comma and two decimal places. */
 export function maskMoney(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 9);

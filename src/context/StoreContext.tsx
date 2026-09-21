@@ -18,6 +18,7 @@ import {
   canRequestExchange,
   cardBrand,
   couponDiscount,
+  customerRanking,
   isPickup,
   loadState,
   productSlug,
@@ -41,6 +42,17 @@ import {
 } from "../data/commerce";
 import { type Product } from "../data/products";
 import { type ShippingOption } from "../data/checkout";
+import {
+  composePhone,
+  hasBillingAddress,
+  hasDeliveryAddress,
+  hashPassword,
+  passwordsMatch,
+  validateAddress,
+  validateCardInput,
+  validateCustomerCore,
+  validateSignupPasswords,
+} from "../data/customerRules";
 
 type PlaceOrderInput = {
   address: Address;
@@ -62,20 +74,34 @@ type StoreValue = {
     name: string;
     email: string;
     password: string;
+    passwordConfirm: string;
     cpf: string;
-    phone: string;
     gender: string;
     birthDate: string;
+    phoneType: string;
+    phoneDdd: string;
+    phoneNumber: string;
+    address: Omit<Address, "id">;
   }) => string | null;
   logout: () => void;
-  updateProfile: (data: Partial<Pick<Customer, "name" | "phone" | "gender" | "birthDate" | "cpf">>) => string | null;
+  updateProfile: (
+    data: Partial<Pick<Customer, "name" | "phone" | "gender" | "birthDate" | "cpf" | "phoneType" | "phoneDdd" | "phoneNumber">>
+  ) => string | null;
+  changePassword: (currentPassword: string, next: string, confirm: string) => string | null;
   deleteAccount: () => string | null;
   setCustomerStatus: (id: string, status: CustomerStatus) => string | null;
   addAddress: (address: Omit<Address, "id">) => Address | { error: string };
   updateAddress: (address: Address) => string | null;
-  removeAddress: (id: string) => void;
-  addCard: (card: Omit<Card, "id" | "last4" | "brand">) => Card;
+  removeAddress: (id: string) => string | null;
+  addCard: (
+    card: Omit<Card, "id" | "last4" | "brand" | "preferred"> & {
+      brand?: string;
+      cvv?: string;
+      preferred?: boolean;
+    }
+  ) => Card | { error: string };
   removeCard: (id: string) => void;
+  setPreferredCard: (id: string) => string | null;
   addProduct: (data: Omit<Product, "id" | "rating" | "reviews"> & Partial<Pick<Product, "rating" | "reviews">>) =>
     | string
     | { error: string };
@@ -170,11 +196,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const current = state.customers.find((c) => c.id === state.sessionId) ?? null;
 
   const value = useMemo<StoreValue>(() => {
-    const user = current ? toPublic(current) : null;
+    const user = current
+      ? { ...toPublic(current), ranking: customerRanking(state.orders, current.id) }
+      : null;
 
     const login = (email: string, password: string) => {
       const found = state.customers.find(
-        (a) => a.email.toLowerCase() === email.toLowerCase() && a.password === password
+        (a) => a.email.toLowerCase() === email.toLowerCase() && passwordsMatch(a.password, password)
       );
       if (!found) return "E-mail ou senha inválidos.";
       if (found.role !== "admin" && found.status === "inativo") {
@@ -186,25 +214,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     const signup: StoreValue["signup"] = (data) => {
-      if (data.name.trim().length < 2) return "Informe seu nome.";
-      if (!data.email.includes("@")) return "E-mail inválido.";
-      if (data.password.length < 6) return "A senha precisa ter ao menos 6 caracteres.";
-      if (data.cpf.replace(/\D/g, "").length !== 11) return "CPF deve ter 11 dígitos.";
+      const coreErr = validateCustomerCore(data);
+      if (coreErr) return coreErr;
+      const passErr = validateSignupPasswords(data.password, data.passwordConfirm);
+      if (passErr) return passErr;
+      const addrErr = validateAddress(data.address);
+      if (addrErr) return addrErr;
+      if (!hasBillingAddress([data.address]) || !hasDeliveryAddress([data.address])) {
+        return "O cadastro exige um endereço de cobrança e um de entrega (use o tipo 'ambos').";
+      }
       if (state.customers.some((a) => a.email.toLowerCase() === data.email.toLowerCase())) {
         return "Já existe uma conta com este e-mail.";
       }
+      if (state.customers.some((a) => a.cpf && a.cpf === data.cpf.replace(/\D/g, ""))) {
+        return "Já existe uma conta com este CPF.";
+      }
+      const phone = composePhone(data.phoneType, data.phoneDdd, data.phoneNumber);
       const customer: Customer = {
         id: uid("cust"),
         name: data.name.trim(),
         email: data.email.trim(),
-        password: data.password,
+        password: hashPassword(data.password),
         cpf: data.cpf.replace(/\D/g, ""),
-        phone: data.phone,
+        phone,
+        phoneType: data.phoneType,
+        phoneDdd: data.phoneDdd.replace(/\D/g, ""),
+        phoneNumber: data.phoneNumber.replace(/\D/g, ""),
         gender: data.gender,
         birthDate: data.birthDate,
         status: "ativo",
         role: "client",
-        addresses: [],
+        ranking: 0,
+        addresses: [{ ...data.address, id: uid("addr"), label: data.address.label.trim() }],
         cards: [],
       };
       patch((s) => ({
@@ -223,9 +264,51 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const updateProfile: StoreValue["updateProfile"] = (data) => {
       if (!current) return "Entre para editar o cadastro.";
+      const merged = { ...current, ...data };
+      const coreErr = validateCustomerCore({
+        name: merged.name,
+        email: merged.email,
+        cpf: merged.cpf,
+        gender: merged.gender,
+        birthDate: merged.birthDate,
+        phoneType: merged.phoneType,
+        phoneDdd: merged.phoneDdd,
+        phoneNumber: merged.phoneNumber,
+      });
+      if (coreErr) return coreErr;
+      const cpf = merged.cpf.replace(/\D/g, "");
+      if (state.customers.some((c) => c.id !== current.id && c.cpf === cpf)) {
+        return "Já existe uma conta com este CPF.";
+      }
+      const phone = composePhone(merged.phoneType, merged.phoneDdd, merged.phoneNumber);
       patch((s) => ({
         ...s,
-        customers: s.customers.map((c) => (c.id === current.id ? { ...c, ...data } : c)),
+        customers: s.customers.map((c) =>
+          c.id === current.id
+            ? {
+                ...c,
+                ...data,
+                cpf,
+                phone,
+                phoneDdd: merged.phoneDdd.replace(/\D/g, ""),
+                phoneNumber: merged.phoneNumber.replace(/\D/g, ""),
+              }
+            : c
+        ),
+      }));
+      return null;
+    };
+
+    const changePassword: StoreValue["changePassword"] = (currentPassword, next, confirm) => {
+      if (!current) return "Entre para alterar a senha.";
+      if (!passwordsMatch(current.password, currentPassword)) return "Senha atual incorreta.";
+      const passErr = validateSignupPasswords(next, confirm);
+      if (passErr) return passErr;
+      patch((s) => ({
+        ...s,
+        customers: s.customers.map((c) =>
+          c.id === current.id ? { ...c, password: hashPassword(next) } : c
+        ),
       }));
       return null;
     };
@@ -259,7 +342,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const addAddress: StoreValue["addAddress"] = (address) => {
       if (!current) return { error: "Entre para cadastrar um endereço." };
-      if (!address.label.trim()) return { error: "Informe um apelido para o endereço." };
+      const err = validateAddress(address);
+      if (err) return { error: err };
       if (addressLabelTaken(current.addresses, address.label)) {
         return { error: "Já existe um endereço com esse apelido." };
       }
@@ -275,9 +359,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const updateAddress: StoreValue["updateAddress"] = (address) => {
       if (!current) return "Entre para alterar o endereço.";
-      if (!address.label.trim()) return "Informe um apelido para o endereço.";
+      const err = validateAddress(address);
+      if (err) return err;
       if (addressLabelTaken(current.addresses, address.label, address.id)) {
         return "Já existe um endereço com esse apelido.";
+      }
+      const next = current.addresses.map((a) => (a.id === address.id ? address : a));
+      if (!hasBillingAddress(next) || !hasDeliveryAddress(next)) {
+        return "Mantenha ao menos um endereço de cobrança e um de entrega.";
       }
       patch((s) => ({
         ...s,
@@ -296,32 +385,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     const removeAddress: StoreValue["removeAddress"] = (id) => {
-      if (!current) return;
+      if (!current) return "Entre para excluir o endereço.";
+      const next = current.addresses.filter((a) => a.id !== id);
+      if (!hasBillingAddress(next) || !hasDeliveryAddress(next)) {
+        return "Não é possível excluir: mantenha ao menos um endereço de cobrança e um de entrega.";
+      }
       patch((s) => ({
         ...s,
         customers: s.customers.map((c) =>
           c.id === current.id ? { ...c, addresses: c.addresses.filter((a) => a.id !== id) } : c
         ),
       }));
+      return null;
     };
 
     const addCard: StoreValue["addCard"] = (card) => {
+      if (!current) return { error: "Entre para cadastrar um cartão." };
+      const err = validateCardInput(card);
+      if (err) return { error: err };
       const digits = card.number.replace(/\D/g, "");
+      const brand = card.brand?.trim() || cardBrand(digits);
+      const preferred = current.cards.length === 0 ? true : Boolean(card.preferred);
       const next: Card = {
-        ...card,
-        id: uid("card"),
+        holder: card.holder.trim(),
         number: digits,
+        expiry: card.expiry,
+        id: uid("card"),
         last4: digits.slice(-4),
-        brand: cardBrand(digits),
+        brand,
+        preferred,
       };
-      if (current) {
-        patch((s) => ({
-          ...s,
-          customers: s.customers.map((c) =>
-            c.id === current.id ? { ...c, cards: [...c.cards, next] } : c
-          ),
-        }));
-      }
+      patch((s) => ({
+        ...s,
+        customers: s.customers.map((c) =>
+          c.id === current.id
+            ? {
+                ...c,
+                cards: [...c.cards.map((item) => ({ ...item, preferred: preferred ? false : item.preferred })), next],
+              }
+            : c
+        ),
+      }));
       return next;
     };
 
@@ -329,10 +433,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!current) return;
       patch((s) => ({
         ...s,
+        customers: s.customers.map((c) => {
+          if (c.id !== current.id) return c;
+          const cards = c.cards.filter((a) => a.id !== id);
+          if (cards.length && !cards.some((item) => item.preferred)) {
+            cards[0] = { ...cards[0], preferred: true };
+          }
+          return { ...c, cards };
+        }),
+      }));
+    };
+
+    const setPreferredCard: StoreValue["setPreferredCard"] = (id) => {
+      if (!current) return "Entre para definir o cartão preferencial.";
+      if (!current.cards.some((c) => c.id === id)) return "Cartão não encontrado.";
+      patch((s) => ({
+        ...s,
         customers: s.customers.map((c) =>
-          c.id === current.id ? { ...c, cards: c.cards.filter((a) => a.id !== id) } : c
+          c.id === current.id
+            ? { ...c, cards: c.cards.map((item) => ({ ...item, preferred: item.id === id })) }
+            : c
         ),
       }));
+      return null;
     };
 
     const addProduct: StoreValue["addProduct"] = (data) => {
@@ -457,7 +580,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       let address = input.address;
       let customers = state.customers;
       if (input.saveAddress && !current.addresses.some((a) => a.id === address.id)) {
-        if (!address.label.trim()) return { error: "Informe um apelido para o endereço." };
+        const addrErr = validateAddress(address);
+        if (addrErr) return { error: addrErr };
         if (addressLabelTaken(current.addresses, address.label)) {
           return { error: "Já existe um endereço com esse apelido." };
         }
@@ -634,7 +758,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     return {
       user,
-      customers: state.customers.filter((c) => c.role === "client").map(toPublic),
+      customers: state.customers
+        .filter((c) => c.role === "client")
+        .map((c) => ({ ...toPublic(c), ranking: customerRanking(state.orders, c.id) })),
       orders: state.orders,
       coupons: state.coupons,
       catalog: state.catalog,
@@ -642,6 +768,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       signup,
       logout,
       updateProfile,
+      changePassword,
       deleteAccount,
       setCustomerStatus,
       addAddress,
@@ -649,6 +776,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeAddress,
       addCard,
       removeCard,
+      setPreferredCard,
       addProduct,
       updateProduct,
       deleteProduct,

@@ -34,9 +34,14 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
   TROCA_PROCESSADA: "Troca processada",
 };
 
+export type AddressKind = "entrega" | "cobranca" | "ambos";
+
 export type Address = {
   id: string;
   label: string;
+  kind: AddressKind;
+  residenceType: string;
+  streetType: string;
   recipient: string;
   phone: string;
   cep: string;
@@ -46,6 +51,8 @@ export type Address = {
   neighborhood: string;
   city: string;
   state: string;
+  country: string;
+  notes: string;
 };
 
 export type Card = {
@@ -55,6 +62,7 @@ export type Card = {
   last4: string;
   brand: string;
   expiry: string;
+  preferred: boolean;
 };
 
 export type Customer = {
@@ -64,10 +72,14 @@ export type Customer = {
   password: string;
   cpf: string;
   phone: string;
+  phoneType: string;
+  phoneDdd: string;
+  phoneNumber: string;
   gender: string;
   birthDate: string;
   status: CustomerStatus;
   role: Role;
+  ranking: number;
   addresses: Address[];
   cards: Card[];
 };
@@ -159,9 +171,32 @@ export function uid(prefix = "id") {
 }
 
 export function formatAddress(a: Address) {
-  const line1 = `${a.street}, ${a.number}${a.complement ? ` — ${a.complement}` : ""}`;
-  const line2 = `${a.neighborhood} · ${a.city}/${a.state}`;
-  return `${line1}\n${line2}\nCEP ${a.cep}`;
+  const streetType = a.streetType || "";
+  const residence = a.residenceType || "";
+  const country = a.country || "Brasil";
+  const line1 = `${streetType} ${a.street}, ${a.number}${a.complement ? ` — ${a.complement}` : ""}`.trim();
+  const line2 = `${a.neighborhood} · ${a.city}/${a.state} · ${country}`;
+  return `${residence ? `${residence} · ` : ""}${line1}\n${line2}\nCEP ${a.cep}`;
+}
+
+export function addressDefaults(partial: Partial<Address> & Pick<Address, "id" | "label">): Address {
+  return {
+    kind: "ambos",
+    residenceType: "Casa",
+    streetType: "Rua",
+    recipient: "",
+    phone: "",
+    cep: "",
+    street: "",
+    number: "",
+    complement: "",
+    neighborhood: "",
+    city: "",
+    state: "",
+    country: "Brasil",
+    notes: "",
+    ...partial,
+  };
 }
 
 export function formatPercent(n: number) {
@@ -175,6 +210,27 @@ export function couponPercentSum(coupons: { value: number }[]) {
 export function couponDiscount(subtotal: number, coupons: { value: number }[]) {
   const p = couponPercentSum(coupons);
   return Math.round(((subtotal * p) / 100) * 100) / 100;
+}
+
+export function migrateAddress(a: Partial<Address> & Pick<Address, "id" | "label">): Address {
+  return addressDefaults(a);
+}
+
+export function migrateCustomer(c: Customer): Customer {
+  const fromPhone = (c.phoneNumber || c.phone || "").replace(/\D/g, "");
+  const cards = (c.cards ?? []).map((card, i) => ({
+    ...card,
+    preferred: card.preferred ?? i === 0,
+  }));
+  return {
+    ...c,
+    phoneType: c.phoneType || "celular",
+    phoneDdd: c.phoneDdd || fromPhone.slice(0, 2) || "11",
+    phoneNumber: c.phoneNumber || fromPhone.slice(2),
+    ranking: c.ranking ?? 0,
+    addresses: (c.addresses ?? []).map((a) => migrateAddress(a)),
+    cards,
+  };
 }
 
 export function addressLabelTaken(addresses: Address[], label: string, exceptId?: string) {
@@ -206,10 +262,20 @@ export function productSlug(name: string, existing: Product[], keepId?: string) 
 
 export function cardBrand(number: string) {
   const d = number.replace(/\D/g, "");
+  if (d.startsWith("34") || d.startsWith("37")) return "American Express";
   if (d.startsWith("4")) return "Visa";
   if (d.startsWith("5")) return "Mastercard";
   if (d.startsWith("6")) return "Elo";
-  return "Cartão";
+  return "";
+}
+
+export function customerRanking(orders: { customerId: string; status: OrderStatus }[], customerId: string) {
+  return orders.filter(
+    (o) =>
+      o.customerId === customerId &&
+      o.status !== "CANCELADO" &&
+      o.status !== "EM_ABERTO"
+  ).length;
 }
 
 export function isPickup(order: Pick<Order, "shipping">) {
@@ -315,61 +381,70 @@ function makeOrder(partial: Omit<Order, "history" | "subtotal" | "shippingPrice"
   return { ...partial, history, subtotal, shippingPrice, discount, total };
 }
 
-const anaHome: Address = {
+const anaHome: Address = addressDefaults({
   id: "addr-ana-1",
   label: "Casa",
+  kind: "ambos",
+  residenceType: "Apartamento",
+  streetType: "Rua",
   recipient: "Ana Souza",
   phone: "(11) 98888-1234",
   cep: "01310-100",
-  street: "Rua Augusta",
+  street: "Augusta",
   number: "1500",
   complement: "Apto 42",
   neighborhood: "Bela Vista",
   city: "São Paulo",
   state: "SP",
-};
+});
 
-const anaWork: Address = {
+const anaWork: Address = addressDefaults({
   id: "addr-ana-2",
   label: "Trabalho",
+  kind: "entrega",
+  residenceType: "Comercial",
+  streetType: "Avenida",
   recipient: "Ana Souza",
   phone: "(11) 98888-1234",
   cep: "01311-200",
-  street: "Av. Paulista",
+  street: "Paulista",
   number: "1578",
   complement: "Conj. 101",
   neighborhood: "Bela Vista",
   city: "São Paulo",
   state: "SP",
-};
+});
 
-const carlaHome: Address = {
+const carlaHome: Address = addressDefaults({
   id: "addr-carla-1",
   label: "Casa",
+  kind: "ambos",
   recipient: "Carla Mendes",
   phone: "(11) 97777-2222",
   cep: "04038-001",
-  street: "Rua Domingos de Morais",
+  streetType: "Rua",
+  street: "Domingos de Morais",
   number: "2564",
-  complement: "",
   neighborhood: "Vila Mariana",
   city: "São Paulo",
   state: "SP",
-};
+});
 
-const brunoHome: Address = {
+const brunoHome: Address = addressDefaults({
   id: "addr-bruno-1",
   label: "Casa",
+  kind: "ambos",
   recipient: "Bruno Lima",
   phone: "(21) 98888-0000",
   cep: "22041-080",
-  street: "Rua Barata Ribeiro",
+  streetType: "Rua",
+  street: "Barata Ribeiro",
   number: "370",
   complement: "501",
   neighborhood: "Copacabana",
   city: "Rio de Janeiro",
   state: "RJ",
-};
+});
 
 export function seedState(): CommerceState {
   const customers: Customer[] = [
@@ -378,12 +453,16 @@ export function seedState(): CommerceState {
       name: "Administrador",
       email: "admin@3dstore.com",
       password: "admin123",
-      cpf: "00000000000",
+      cpf: "86288366757",
       phone: "(11) 3000-0000",
+      phoneType: "fixo",
+      phoneDdd: "11",
+      phoneNumber: "30000000",
       gender: "Prefiro não informar",
       birthDate: "1990-01-01",
       status: "ativo",
       role: "admin",
+      ranking: 0,
       addresses: [],
       cards: [],
     },
@@ -392,12 +471,16 @@ export function seedState(): CommerceState {
       name: "Ana Souza",
       email: "ana.souza@email.com",
       password: "123456",
-      cpf: "12345678901",
+      cpf: "52998224725",
       phone: "(11) 98888-1234",
+      phoneType: "celular",
+      phoneDdd: "11",
+      phoneNumber: "988881234",
       gender: "Feminino",
       birthDate: "1994-05-12",
       status: "ativo",
       role: "client",
+      ranking: 0,
       addresses: [anaHome, anaWork],
       cards: [
         {
@@ -407,6 +490,7 @@ export function seedState(): CommerceState {
           last4: "1111",
           brand: "Visa",
           expiry: "12/28",
+          preferred: true,
         },
         {
           id: "card-ana-2",
@@ -415,6 +499,7 @@ export function seedState(): CommerceState {
           last4: "4444",
           brand: "Mastercard",
           expiry: "08/27",
+          preferred: false,
         },
       ],
     },
@@ -423,12 +508,16 @@ export function seedState(): CommerceState {
       name: "Carla Mendes",
       email: "carla.mendes@email.com",
       password: "123456",
-      cpf: "98765432100",
+      cpf: "39053344705",
       phone: "(11) 97777-2222",
+      phoneType: "celular",
+      phoneDdd: "11",
+      phoneNumber: "977772222",
       gender: "Feminino",
       birthDate: "1988-11-03",
       status: "ativo",
       role: "client",
+      ranking: 0,
       addresses: [carlaHome],
       cards: [
         {
@@ -438,6 +527,7 @@ export function seedState(): CommerceState {
           last4: "1881",
           brand: "Visa",
           expiry: "03/29",
+          preferred: true,
         },
       ],
     },
@@ -446,12 +536,16 @@ export function seedState(): CommerceState {
       name: "Bruno Lima",
       email: "bruno.lima@email.com",
       password: "123456",
-      cpf: "11122233344",
+      cpf: "15350946056",
       phone: "(21) 98888-0000",
+      phoneType: "celular",
+      phoneDdd: "21",
+      phoneNumber: "988880000",
       gender: "Masculino",
       birthDate: "1991-07-20",
       status: "inativo",
       role: "client",
+      ranking: 0,
       addresses: [brunoHome],
       cards: [],
     },
@@ -718,6 +812,7 @@ export function loadState(): CommerceState {
     if (!raw) return seedState();
     const parsed = JSON.parse(raw) as CommerceState;
     if (!parsed.customers?.length) return seedState();
+    parsed.customers = parsed.customers.map((c) => migrateCustomer(c));
     if (!parsed.catalog?.length) parsed.catalog = cloneCatalog();
     const orders = (parsed.orders ?? []).map((o) => settlePaymentIfDue(o));
     const changed = orders.some((o, i) => o.status !== parsed.orders[i]?.status);
