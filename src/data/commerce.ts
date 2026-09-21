@@ -865,7 +865,8 @@ export type CategoryBar = { id: CategoryId; label: string; total: number };
 
 export function chartFromOrders(
   orders: Order[],
-  categoryLabels: { id: CategoryId; label: string }[]
+  categoryLabels: { id: CategoryId; label: string }[],
+  categoryIds: CategoryId[] = []
 ): { months: ChartPoint[]; categories: CategoryBar[] } {
   const paid = new Set<OrderStatus>([
     "PAGAMENTO_REALIZADO",
@@ -879,14 +880,25 @@ export function chartFromOrders(
     "TROCA_PROCESSADA",
   ]);
   const relevant = orders.filter((o) => paid.has(o.status));
+  const catFilter = categoryIds.length > 0 ? new Set(categoryIds) : null;
+  const matchingItems = (o: Order) =>
+    o.items.filter((item) => !catFilter || catFilter.has(item.category));
+  const amountOf = (o: Order) => {
+    const items = matchingItems(o);
+    if (items.length === 0) return 0;
+    if (!catFilter) return o.total;
+    return items.reduce((sum, item) => sum + item.line, 0);
+  };
 
   const monthMap = new Map<string, ChartPoint>();
   for (const o of relevant) {
+    const amount = amountOf(o);
+    if (amount <= 0) continue;
     const d = new Date(o.createdAt);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
     const cur = monthMap.get(key) ?? { label, total: 0, count: 0 };
-    cur.total += o.total;
+    cur.total += amount;
     cur.count += 1;
     monthMap.set(key, cur);
   }
@@ -896,15 +908,17 @@ export function chartFromOrders(
 
   const catMap = new Map<CategoryId, number>();
   for (const o of relevant) {
-    for (const item of o.items) {
+    for (const item of matchingItems(o)) {
       catMap.set(item.category, (catMap.get(item.category) ?? 0) + item.line);
     }
   }
-  const categories = categoryLabels.map((c) => ({
-    id: c.id,
-    label: c.label,
-    total: catMap.get(c.id) ?? 0,
-  }));
+  const categories = categoryLabels
+    .filter((c) => !catFilter || catFilter.has(c.id))
+    .map((c) => ({
+      id: c.id,
+      label: c.label,
+      total: catMap.get(c.id) ?? 0,
+    }));
 
   return { months, categories };
 }

@@ -2,13 +2,9 @@
 
 Loja virtual de peças impressas em 3D. O visitante navega por categorias, vê detalhes do produto, escolhe cor e quantidade, monta um carrinho e cria uma conta — tudo no navegador, sem backend.
 
-O visual segue o protótipo **3D Store** gerado no [Figma Make](https://www.figma.com/make/WpmFIt8Wv5dAm0xmMoxbAh/Follow-PDF-Instructions): tema escuro, acentos em roxo e ciano, tipografia Inter e interface em português.
-
-Documentação completa da ideia, telas, dados e regras: [`docs/especificacao.md`](docs/especificacao.md).
-
 ## O que o site faz
 
-- Home com hero, categorias, destaques e chamada para o ateliê
+- Home com categorias, destaques e chamada para o ateliê
 - Catálogo com filtro por categoria, busca e ordenação
 - Página de produto (cor, quantidade, itens relacionados)
 - Carrinho persistido no `localStorage`

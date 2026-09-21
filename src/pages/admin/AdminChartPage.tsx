@@ -1,5 +1,6 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { categories, formatPrice } from "../../data/products";
+import { categories, formatPrice, type CategoryId } from "../../data/products";
 import { chartFromOrders, type ChartPoint } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
 
@@ -64,9 +65,21 @@ function MonthLineChart({ months }: { months: ChartPoint[] }) {
 
 export function AdminChartPage() {
   const { orders } = useStore();
-  const { months, categories: bars } = chartFromOrders(orders, categories);
+  const [selected, setSelected] = useState<CategoryId[]>([]);
+  const { months, categories: bars } = useMemo(
+    () => chartFromOrders(orders, categories, selected),
+    [orders, selected]
+  );
   const maxCat = Math.max(1, ...bars.map((c) => c.total));
   const revenue = months.reduce((s, m) => s + m.total, 0);
+  const orderCount = months.reduce((s, m) => s + m.count, 0);
+  const allActive = selected.length === 0;
+
+  const toggleCategory = (id: CategoryId) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
+  };
 
   return (
     <div>
@@ -74,13 +87,38 @@ export function AdminChartPage() {
       <h1 className="page-title">Gráfico de vendas</h1>
       <p className="page-lead">
         Pedidos com pagamento confirmado (e fluxos seguintes). Receita {formatPrice(revenue)} ·{" "}
-        {orders.length} pedidos no total.
+        {orderCount} pedidos{allActive ? ` · ${orders.length} no total` : " na seleção"}.
       </p>
 
       <section className="panel card-surface">
         <h2 className="panel__title">Receita por mês</h2>
+        <p className="muted chart-filters__hint">Filtre por categoria. Várias podem ficar ativas ao mesmo tempo.</p>
+        <div className="chart-filters" role="group" aria-label="Filtrar gráfico por categoria">
+          <button
+            type="button"
+            className={`chip${allActive ? " is-active" : ""}`}
+            aria-pressed={allActive}
+            onClick={() => setSelected([])}
+          >
+            Todas
+          </button>
+          {categories.map((c) => {
+            const active = selected.includes(c.id);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                className={`chip${active ? " is-active" : ""}`}
+                aria-pressed={active}
+                onClick={() => toggleCategory(c.id)}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
         {months.length === 0 ? (
-          <p className="muted">Nenhuma venda no período.</p>
+          <p className="muted">Nenhuma venda no período{allActive ? "." : " para as categorias selecionadas."}</p>
         ) : (
           <MonthLineChart months={months} />
         )}

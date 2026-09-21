@@ -2117,6 +2117,18 @@ textarea.field__control {
   margin: 16px 0 8px;
 }
 
+.chart-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 16px;
+}
+
+.chart-filters__hint {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
 .line-chart {
   display: block;
   width: 100%;
