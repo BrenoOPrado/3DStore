@@ -83,11 +83,11 @@ export function AdminProductsPage() {
     };
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const data = parsed();
     if (editing) {
-      const err = updateProduct({
+      const err = await updateProduct({
         ...editing,
         ...data,
       });
@@ -97,7 +97,7 @@ export function AdminProductsPage() {
       }
       setMsg("Produto atualizado.");
     } else {
-      const result = addProduct(data);
+      const result = await addProduct(data);
       if (typeof result !== "string") {
         setMsg(result.error);
         return;
@@ -107,9 +107,9 @@ export function AdminProductsPage() {
     setOpen(false);
   };
 
-  const onDelete = (p: Product) => {
+  const onDelete = async (p: Product) => {
     if (!window.confirm(`Excluir “${p.name}”?`)) return;
-    const err = deleteProduct(p.id);
+    const err = await deleteProduct(p.id);
     setMsg(err ?? "Produto excluído.");
     if (!err && editing?.id === p.id) {
       setOpen(false);

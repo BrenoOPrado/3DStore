@@ -111,7 +111,7 @@ export function Header() {
               <Link to="/conta/pedidos" className="login-link">
                 Pedidos
               </Link>
-              <button type="button" onClick={logout} className="btn-outline" data-testid="logout">
+              <button type="button" onClick={() => void logout()} className="btn-outline" data-testid="logout">
                 Sair
               </button>
             </div>

@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { categories, formatPrice, type CategoryId } from "../../data/products";
-import { chartFromOrders, type ChartPoint } from "../../data/commerce";
+import { type ChartData, type ChartPoint } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
 
 function MonthLineChart({ months }: { months: ChartPoint[] }) {
@@ -64,16 +64,27 @@ function MonthLineChart({ months }: { months: ChartPoint[] }) {
 }
 
 export function AdminChartPage() {
-  const { orders } = useStore();
+  const { loadChart } = useStore();
   const [selected, setSelected] = useState<CategoryId[]>([]);
-  const { months, categories: bars } = useMemo(
-    () => chartFromOrders(orders, categories, selected),
-    [orders, selected]
-  );
+  const [chart, setChart] = useState<ChartData | null>(null);
+  const months = chart?.months ?? [];
+  const bars = chart?.categories ?? [];
   const maxCat = Math.max(1, ...bars.map((c) => c.total));
-  const revenue = months.reduce((s, m) => s + m.total, 0);
-  const orderCount = months.reduce((s, m) => s + m.count, 0);
+  const revenue = chart?.revenue ?? 0;
+  const orderCount = chart?.orderCount ?? 0;
+  const totalOrders = chart?.totalOrders ?? 0;
   const allActive = selected.length === 0;
+
+  useEffect(() => {
+    let live = true;
+    loadChart(selected).then((data) => {
+      if (!live || "error" in data) return;
+      setChart(data);
+    });
+    return () => {
+      live = false;
+    };
+  }, [loadChart, selected]);
 
   const toggleCategory = (id: CategoryId) => {
     setSelected((prev) =>
@@ -87,7 +98,7 @@ export function AdminChartPage() {
       <h1 className="page-title">Gráfico de vendas</h1>
       <p className="page-lead">
         Pedidos com pagamento confirmado (e fluxos seguintes). Receita {formatPrice(revenue)} ·{" "}
-        {orderCount} pedidos{allActive ? ` · ${orders.length} no total` : " na seleção"}.
+        {orderCount} pedidos{allActive ? ` · ${totalOrders} no total` : " na seleção"}.
       </p>
 
       <section className="panel card-surface">

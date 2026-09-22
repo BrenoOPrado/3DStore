@@ -7,69 +7,54 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  STORE_KEY,
-  addressLabelTaken,
-  adminTransitions,
-  availableCoupons,
-  canCancel,
-  canConfirmReceipt,
-  canDispatchItem,
-  canRequestExchange,
-  cardBrand,
-  couponDiscount,
-  customerRanking,
-  isPickup,
-  loadState,
-  productSlug,
-  saveState,
-  settlePaymentIfDue,
-  toPublic,
-  uid,
-  writeSessionId,
-  type Address,
-  type Card,
-  type CommerceState,
-  type Coupon,
-  type CouponType,
-  type Customer,
-  type CustomerStatus,
-  type Order,
-  type OrderItem,
-  type OrderStatus,
-  type PaymentSplit,
-  type PublicUser,
+import { api, ApiError, apiMutate } from "../api/client";
+import type { QuoteResult, Snapshot } from "../api/types";
+import type {
+  Address,
+  Card,
+  ChartData,
+  Coupon,
+  CouponType,
+  Customer,
+  CustomerStatus,
+  Order,
+  OrderStatus,
+  PublicUser,
 } from "../data/commerce";
+import type { CustomerFilter } from "../data/customerRules";
 import { type Product } from "../data/products";
-import { type ShippingOption } from "../data/checkout";
-import {
-  composePhone,
-  hasBillingAddress,
-  hasDeliveryAddress,
-  hashPassword,
-  passwordsMatch,
-  validateAddress,
-  validateCardInput,
-  validateCustomerCore,
-  validateSignupPasswords,
-} from "../data/customerRules";
 
 type PlaceOrderInput = {
-  address: Address;
+  addressId?: string;
+  address?: Omit<Address, "id"> & { id?: string };
   saveAddress?: boolean;
-  shipping: ShippingOption;
+  shippingId: string;
   couponCodes: string[];
   payments: { cardId: string; amount: number }[];
-  items: OrderItem[];
+  items: { productId: string; color: string; quantity: number }[];
+};
+
+const emptySnapshot: Snapshot = {
+  user: null,
+  catalog: [],
+  categories: [],
+  customers: [],
+  orders: [],
+  coupons: [],
+  myOrders: [],
+  myCoupons: [],
+  myUsedCoupons: [],
+  lastOrderId: null,
 };
 
 type StoreValue = {
+  ready: boolean;
   user: PublicUser | null;
   customers: PublicUser[];
   orders: Order[];
   coupons: Coupon[];
   catalog: Product[];
-  login: (email: string, password: string) => string | null;
+  login: (email: string, password: string) => Promise<string | null>;
   signup: (data: {
     name: string;
     email: string;
@@ -82,685 +67,312 @@ type StoreValue = {
     phoneDdd: string;
     phoneNumber: string;
     address: Omit<Address, "id">;
-  }) => string | null;
-  logout: () => void;
+  }) => Promise<string | null>;
+  logout: () => Promise<void>;
   updateProfile: (
     data: Partial<Pick<Customer, "name" | "phone" | "gender" | "birthDate" | "cpf" | "phoneType" | "phoneDdd" | "phoneNumber">>
-  ) => string | null;
-  changePassword: (currentPassword: string, next: string, confirm: string) => string | null;
-  deleteAccount: () => string | null;
-  setCustomerStatus: (id: string, status: CustomerStatus) => string | null;
-  addAddress: (address: Omit<Address, "id">) => Address | { error: string };
-  updateAddress: (address: Address) => string | null;
-  removeAddress: (id: string) => string | null;
+  ) => Promise<string | null>;
+  changePassword: (currentPassword: string, next: string, confirm: string) => Promise<string | null>;
+  deleteAccount: () => Promise<string | null>;
+  setCustomerStatus: (id: string, status: CustomerStatus) => Promise<string | null>;
+  addAddress: (address: Omit<Address, "id">) => Promise<Address | { error: string }>;
+  updateAddress: (address: Address) => Promise<string | null>;
+  removeAddress: (id: string) => Promise<string | null>;
   addCard: (
     card: Omit<Card, "id" | "last4" | "brand" | "preferred"> & {
       brand?: string;
+      number: string;
       cvv?: string;
       preferred?: boolean;
     }
-  ) => Card | { error: string };
-  removeCard: (id: string) => void;
-  setPreferredCard: (id: string) => string | null;
+  ) => Promise<Card | { error: string }>;
+  removeCard: (id: string) => Promise<void>;
+  setPreferredCard: (id: string) => Promise<string | null>;
   addProduct: (data: Omit<Product, "id" | "rating" | "reviews"> & Partial<Pick<Product, "rating" | "reviews">>) =>
-    | string
-    | { error: string };
-  updateProduct: (product: Product) => string | null;
-  deleteProduct: (id: string) => string | null;
+    Promise<string | { error: string }>;
+  updateProduct: (product: Product) => Promise<string | null>;
+  deleteProduct: (id: string) => Promise<string | null>;
   addCoupon: (data: {
     code: string;
     value: number;
     description: string;
     type?: CouponType;
     ownerEmail?: string;
-  }) => string | { error: string };
-  removeCoupon: (id: string) => string | null;
+  }) => Promise<string | { error: string }>;
+  removeCoupon: (id: string) => Promise<string | null>;
   myOrders: Order[];
   myCoupons: Coupon[];
-  placeOrder: (input: PlaceOrderInput) => string | { error: string };
-  cancelOrder: (id: string) => string | null;
-  confirmReceipt: (id: string) => string | null;
-  requestExchange: (orderId: string, itemId: string, qty: number) => string | null;
-  dispatchExchangeItem: (orderId: string) => string | null;
-  adminSetStatus: (orderId: string, status: OrderStatus) => string | null;
+  myUsedCoupons: Coupon[];
+  quoteCheckout: (input: {
+    items: { productId: string; color: string; quantity: number }[];
+    couponCodes: string[];
+    shippingId?: string;
+    cep: string;
+  }) => Promise<QuoteResult | { error: string }>;
+  placeOrder: (input: PlaceOrderInput) => Promise<string | { error: string }>;
+  cancelOrder: (id: string) => Promise<string | null>;
+  confirmReceipt: (id: string) => Promise<string | null>;
+  requestExchange: (orderId: string, itemId: string, qty: number) => Promise<string | null>;
+  dispatchExchangeItem: (orderId: string) => Promise<string | null>;
+  adminSetStatus: (orderId: string, status: OrderStatus) => Promise<string | null>;
+  loadChart: (categoryIds?: string[]) => Promise<ChartData | { error: string }>;
+  searchCustomers: (filter: CustomerFilter) => Promise<Customer[]>;
   lastOrderId: string | null;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-const CHANNEL = "3dstore-commerce";
-
-function persist(next: CommerceState) {
-  saveState(next);
-  try {
-    new BroadcastChannel(CHANNEL).postMessage({ ...next, sessionId: null });
-  } catch {
-    /* ignore */
-  }
-  return next;
-}
-
-function keepSession(incoming: CommerceState, sessionId: string | null): CommerceState {
-  return { ...incoming, sessionId };
+function pickSnapshot(data: Record<string, unknown>): Snapshot {
+  return {
+    user: (data.user as PublicUser | null) ?? null,
+    catalog: (data.catalog as Product[]) ?? [],
+    categories: (data.categories as Snapshot["categories"]) ?? [],
+    customers: (data.customers as Customer[]) ?? [],
+    orders: (data.orders as Order[]) ?? [],
+    coupons: (data.coupons as Coupon[]) ?? [],
+    myOrders: (data.myOrders as Order[]) ?? [],
+    myCoupons: (data.myCoupons as Coupon[]) ?? [],
+    myUsedCoupons: (data.myUsedCoupons as Coupon[]) ?? [],
+    lastOrderId: (data.lastOrderId as string | null) ?? null,
+  };
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<CommerceState>(loadState);
-  const [lastOrderId, setLastOrderId] = useState<string | null>(
-    () => sessionStorage.getItem("3dstore-last-order-id")
-  );
+  const [state, setState] = useState<Snapshot>(emptySnapshot);
+  const [ready, setReady] = useState(false);
 
-  const patch = useCallback((fn: (s: CommerceState) => CommerceState) => {
-    setState((prev) => persist(fn(prev)));
+  const apply = useCallback((data: Record<string, unknown>) => {
+    setState(pickSnapshot(data));
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const data = await api<Snapshot>("/api/bootstrap");
+    setState(data);
   }, []);
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORE_KEY || !e.newValue) return;
-      try {
-        const incoming = JSON.parse(e.newValue) as CommerceState;
-        setState((prev) => keepSession(incoming, prev.sessionId));
-      } catch {
-        /* ignore */
-      }
-    };
-    window.addEventListener("storage", onStorage);
-
-    let channel: BroadcastChannel | null = null;
-    try {
-      channel = new BroadcastChannel(CHANNEL);
-      channel.onmessage = (e) => {
-        if (e.data && typeof e.data === "object" && Array.isArray(e.data.orders)) {
-          setState((prev) => keepSession(e.data as CommerceState, prev.sessionId));
-        }
-      };
-    } catch {
-      channel = null;
-    }
-
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      channel?.close();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!state.sessionId) return;
-    const me = state.customers.find((c) => c.id === state.sessionId);
-    if (!me || (me.role !== "admin" && me.status === "inativo")) {
-      writeSessionId(null);
-      setState((s) => (s.sessionId ? { ...s, sessionId: null } : s));
-    }
-  }, [state.customers, state.sessionId]);
-
-  const current = state.customers.find((c) => c.id === state.sessionId) ?? null;
+    refresh()
+      .catch(() => setState(emptySnapshot))
+      .finally(() => setReady(true));
+  }, [refresh]);
 
   const value = useMemo<StoreValue>(() => {
-    const user = current
-      ? { ...toPublic(current), ranking: customerRanking(state.orders, current.id) }
-      : null;
+    const errOf = (data: Record<string, unknown>) =>
+      typeof data.error === "string" ? data.error : null;
 
-    const login = (email: string, password: string) => {
-      const found = state.customers.find(
-        (a) => a.email.toLowerCase() === email.toLowerCase() && passwordsMatch(a.password, password)
-      );
-      if (!found) return "E-mail ou senha inválidos.";
-      if (found.role !== "admin" && found.status === "inativo") {
-        return "Esta conta está inativa. Fale com o ateliê.";
-      }
-      writeSessionId(found.id);
-      patch((s) => ({ ...s, sessionId: found.id }));
-      return null;
+    const mutate = async (path: string, init?: RequestInit) => {
+      const data = await apiMutate(path, init);
+      const error = errOf(data);
+      if (!error) apply(data);
+      return { data, error };
     };
 
-    const signup: StoreValue["signup"] = (data) => {
-      const coreErr = validateCustomerCore(data);
-      if (coreErr) return coreErr;
-      const passErr = validateSignupPasswords(data.password, data.passwordConfirm);
-      if (passErr) return passErr;
-      const addrErr = validateAddress(data.address);
-      if (addrErr) return addrErr;
-      if (!hasBillingAddress([data.address]) || !hasDeliveryAddress([data.address])) {
-        return "O cadastro exige um endereço de cobrança e um de entrega (use o tipo 'ambos').";
-      }
-      if (state.customers.some((a) => a.email.toLowerCase() === data.email.toLowerCase())) {
-        return "Já existe uma conta com este e-mail.";
-      }
-      if (state.customers.some((a) => a.cpf && a.cpf === data.cpf.replace(/\D/g, ""))) {
-        return "Já existe uma conta com este CPF.";
-      }
-      const phone = composePhone(data.phoneType, data.phoneDdd, data.phoneNumber);
-      const customer: Customer = {
-        id: uid("cust"),
-        name: data.name.trim(),
-        email: data.email.trim(),
-        password: hashPassword(data.password),
-        cpf: data.cpf.replace(/\D/g, ""),
-        phone,
-        phoneType: data.phoneType,
-        phoneDdd: data.phoneDdd.replace(/\D/g, ""),
-        phoneNumber: data.phoneNumber.replace(/\D/g, ""),
-        gender: data.gender,
-        birthDate: data.birthDate,
-        status: "ativo",
-        role: "client",
-        ranking: 0,
-        addresses: [{ ...data.address, id: uid("addr"), label: data.address.label.trim() }],
-        cards: [],
-      };
-      patch((s) => ({
-        ...s,
-        customers: [...s.customers, customer],
-        sessionId: customer.id,
-      }));
-      writeSessionId(customer.id);
-      return null;
-    };
-
-    const logout = () => {
-      writeSessionId(null);
-      patch((s) => ({ ...s, sessionId: null }));
-    };
-
-    const updateProfile: StoreValue["updateProfile"] = (data) => {
-      if (!current) return "Entre para editar o cadastro.";
-      const merged = { ...current, ...data };
-      const coreErr = validateCustomerCore({
-        name: merged.name,
-        email: merged.email,
-        cpf: merged.cpf,
-        gender: merged.gender,
-        birthDate: merged.birthDate,
-        phoneType: merged.phoneType,
-        phoneDdd: merged.phoneDdd,
-        phoneNumber: merged.phoneNumber,
-      });
-      if (coreErr) return coreErr;
-      const cpf = merged.cpf.replace(/\D/g, "");
-      if (state.customers.some((c) => c.id !== current.id && c.cpf === cpf)) {
-        return "Já existe uma conta com este CPF.";
-      }
-      const phone = composePhone(merged.phoneType, merged.phoneDdd, merged.phoneNumber);
-      patch((s) => ({
-        ...s,
-        customers: s.customers.map((c) =>
-          c.id === current.id
-            ? {
-                ...c,
-                ...data,
-                cpf,
-                phone,
-                phoneDdd: merged.phoneDdd.replace(/\D/g, ""),
-                phoneNumber: merged.phoneNumber.replace(/\D/g, ""),
-              }
-            : c
-        ),
-      }));
-      return null;
-    };
-
-    const changePassword: StoreValue["changePassword"] = (currentPassword, next, confirm) => {
-      if (!current) return "Entre para alterar a senha.";
-      if (!passwordsMatch(current.password, currentPassword)) return "Senha atual incorreta.";
-      const passErr = validateSignupPasswords(next, confirm);
-      if (passErr) return passErr;
-      patch((s) => ({
-        ...s,
-        customers: s.customers.map((c) =>
-          c.id === current.id ? { ...c, password: hashPassword(next) } : c
-        ),
-      }));
-      return null;
-    };
-
-    const deleteAccount = () => {
-      if (!current) return "Entre para excluir a conta.";
-      if (current.role === "admin") return "A conta administrativa não pode ser excluída.";
-      const email = current.email.toLowerCase();
-      patch((s) => ({
-        ...s,
-        customers: s.customers.filter((c) => c.id !== current.id),
-        coupons: s.coupons.filter(
-          (c) => !(c.type === "troca" && c.ownerEmail?.toLowerCase() === email)
-        ),
-        sessionId: null,
-      }));
-      writeSessionId(null);
-      return null;
-    };
-
-    const setCustomerStatus: StoreValue["setCustomerStatus"] = (id, status) => {
-      if (current?.role !== "admin") return "Acesso restrito.";
-      const target = state.customers.find((c) => c.id === id);
-      if (!target || target.role !== "client") return "Cliente não encontrado.";
-      patch((s) => ({
-        ...s,
-        customers: s.customers.map((c) => (c.id === id ? { ...c, status } : c)),
-      }));
-      return null;
-    };
-
-    const addAddress: StoreValue["addAddress"] = (address) => {
-      if (!current) return { error: "Entre para cadastrar um endereço." };
-      const err = validateAddress(address);
-      if (err) return { error: err };
-      if (addressLabelTaken(current.addresses, address.label)) {
-        return { error: "Já existe um endereço com esse apelido." };
-      }
-      const next = { ...address, id: uid("addr"), label: address.label.trim() };
-      patch((s) => ({
-        ...s,
-        customers: s.customers.map((c) =>
-          c.id === current.id ? { ...c, addresses: [...c.addresses, next] } : c
-        ),
-      }));
-      return next;
-    };
-
-    const updateAddress: StoreValue["updateAddress"] = (address) => {
-      if (!current) return "Entre para alterar o endereço.";
-      const err = validateAddress(address);
-      if (err) return err;
-      if (addressLabelTaken(current.addresses, address.label, address.id)) {
-        return "Já existe um endereço com esse apelido.";
-      }
-      const next = current.addresses.map((a) => (a.id === address.id ? address : a));
-      if (!hasBillingAddress(next) || !hasDeliveryAddress(next)) {
-        return "Mantenha ao menos um endereço de cobrança e um de entrega.";
-      }
-      patch((s) => ({
-        ...s,
-        customers: s.customers.map((c) =>
-          c.id === current.id
-            ? {
-                ...c,
-                addresses: c.addresses.map((a) =>
-                  a.id === address.id ? { ...address, label: address.label.trim() } : a
-                ),
-              }
-            : c
-        ),
-      }));
-      return null;
-    };
-
-    const removeAddress: StoreValue["removeAddress"] = (id) => {
-      if (!current) return "Entre para excluir o endereço.";
-      const next = current.addresses.filter((a) => a.id !== id);
-      if (!hasBillingAddress(next) || !hasDeliveryAddress(next)) {
-        return "Não é possível excluir: mantenha ao menos um endereço de cobrança e um de entrega.";
-      }
-      patch((s) => ({
-        ...s,
-        customers: s.customers.map((c) =>
-          c.id === current.id ? { ...c, addresses: c.addresses.filter((a) => a.id !== id) } : c
-        ),
-      }));
-      return null;
-    };
-
-    const addCard: StoreValue["addCard"] = (card) => {
-      if (!current) return { error: "Entre para cadastrar um cartão." };
-      const err = validateCardInput(card);
-      if (err) return { error: err };
-      const digits = card.number.replace(/\D/g, "");
-      const brand = card.brand?.trim() || cardBrand(digits);
-      const preferred = current.cards.length === 0 ? true : Boolean(card.preferred);
-      const next: Card = {
-        holder: card.holder.trim(),
-        number: digits,
-        expiry: card.expiry,
-        id: uid("card"),
-        last4: digits.slice(-4),
-        brand,
-        preferred,
-      };
-      patch((s) => ({
-        ...s,
-        customers: s.customers.map((c) =>
-          c.id === current.id
-            ? {
-                ...c,
-                cards: [...c.cards.map((item) => ({ ...item, preferred: preferred ? false : item.preferred })), next],
-              }
-            : c
-        ),
-      }));
-      return next;
-    };
-
-    const removeCard: StoreValue["removeCard"] = (id) => {
-      if (!current) return;
-      patch((s) => ({
-        ...s,
-        customers: s.customers.map((c) => {
-          if (c.id !== current.id) return c;
-          const cards = c.cards.filter((a) => a.id !== id);
-          if (cards.length && !cards.some((item) => item.preferred)) {
-            cards[0] = { ...cards[0], preferred: true };
-          }
-          return { ...c, cards };
-        }),
-      }));
-    };
-
-    const setPreferredCard: StoreValue["setPreferredCard"] = (id) => {
-      if (!current) return "Entre para definir o cartão preferencial.";
-      if (!current.cards.some((c) => c.id === id)) return "Cartão não encontrado.";
-      patch((s) => ({
-        ...s,
-        customers: s.customers.map((c) =>
-          c.id === current.id
-            ? { ...c, cards: c.cards.map((item) => ({ ...item, preferred: item.id === id })) }
-            : c
-        ),
-      }));
-      return null;
-    };
-
-    const addProduct: StoreValue["addProduct"] = (data) => {
-      if (current?.role !== "admin") return { error: "Acesso restrito." };
-      if (!data.name.trim()) return { error: "Informe o nome do produto." };
-      if (!(data.price > 0)) return { error: "Informe um preço válido." };
-      if (!data.colors.length) return { error: "Informe ao menos uma cor." };
-      const product: Product = {
-        rating: 5,
-        reviews: 0,
-        ...data,
-        id: productSlug(data.name, state.catalog),
-        name: data.name.trim(),
-      };
-      patch((s) => ({ ...s, catalog: [...s.catalog, product] }));
-      return product.id;
-    };
-
-    const updateProduct: StoreValue["updateProduct"] = (product) => {
-      if (current?.role !== "admin") return "Acesso restrito.";
-      if (!state.catalog.some((p) => p.id === product.id)) return "Produto não encontrado.";
-      if (!product.name.trim()) return "Informe o nome do produto.";
-      if (!(product.price > 0)) return "Informe um preço válido.";
-      if (!product.colors.length) return "Informe ao menos uma cor.";
-      patch((s) => ({
-        ...s,
-        catalog: s.catalog.map((p) => (p.id === product.id ? { ...product, name: product.name.trim() } : p)),
-      }));
-      return null;
-    };
-
-    const deleteProduct: StoreValue["deleteProduct"] = (id) => {
-      if (current?.role !== "admin") return "Acesso restrito.";
-      if (!state.catalog.some((p) => p.id === id)) return "Produto não encontrado.";
-      patch((s) => ({ ...s, catalog: s.catalog.filter((p) => p.id !== id) }));
-      return null;
-    };
-
-    const addCoupon: StoreValue["addCoupon"] = (data) => {
-      if (current?.role !== "admin") return { error: "Acesso restrito." };
-      const code = data.code.trim().toUpperCase().replace(/\s+/g, "");
-      if (!code) return { error: "Informe o código do cupom." };
-      if (!/^[A-Z0-9-]+$/.test(code)) return { error: "Use apenas letras, números e hífen no código." };
-      if (state.coupons.some((c) => c.code.toUpperCase() === code)) {
-        return { error: "Já existe um cupom com este código." };
-      }
-      const value = Math.round(Number(data.value));
-      if (!Number.isFinite(value) || value < 1 || value > 100) {
-        return { error: "O desconto deve ser um percentual entre 1 e 100." };
-      }
-      const type = data.type ?? "promocional";
-      const ownerEmail = data.ownerEmail?.trim().toLowerCase() || undefined;
-      if (type === "troca") {
-        if (!ownerEmail) return { error: "Informe o e-mail do cliente para o cupom de troca." };
-        const owner = state.customers.find(
-          (c) => c.role === "client" && c.email.toLowerCase() === ownerEmail
-        );
-        if (!owner) return { error: "Cliente não encontrado para este e-mail." };
-      }
-      const coupon: Coupon = {
-        id: uid("c"),
-        code,
-        type,
-        value,
-        used: false,
-        description: data.description.trim() || `${value}% de desconto`,
-        ownerEmail: type === "troca" ? ownerEmail : undefined,
-      };
-      patch((s) => ({ ...s, coupons: [coupon, ...s.coupons] }));
-      return coupon.id;
-    };
-
-    const removeCoupon: StoreValue["removeCoupon"] = (id) => {
-      if (current?.role !== "admin") return "Acesso restrito.";
-      if (!state.coupons.some((c) => c.id === id)) return "Cupom não encontrado.";
-      patch((s) => ({ ...s, coupons: s.coupons.filter((c) => c.id !== id) }));
-      return null;
-    };
-
-    const placeOrder: StoreValue["placeOrder"] = (input) => {
-      if (!current) return { error: "Entre para finalizar a compra." };
-      if (current.status === "inativo") return { error: "Conta inativa." };
-      if (!input.items.length) return { error: "Carrinho vazio." };
-      if (!input.shipping) return { error: "Selecione o frete." };
-
-      const subtotal = input.items.reduce((s, i) => s + i.line, 0);
-      const coupons = input.couponCodes
-        .map((code) => state.coupons.find((c) => c.code.toUpperCase() === code.toUpperCase()))
-        .filter((c): c is Coupon => Boolean(c));
-
-      for (const c of coupons) {
-        if (c.used) return { error: `Cupom ${c.code} já foi usado.` };
-        if (c.type === "troca" && c.ownerEmail?.toLowerCase() !== current.email.toLowerCase()) {
-          return { error: `Cupom ${c.code} não pertence a esta conta.` };
-        }
-      }
-
-      const discount = couponDiscount(subtotal, coupons);
-      const total = Math.max(0, Math.round((subtotal + input.shipping.price - discount) * 100) / 100);
-      const paySum = Math.round(input.payments.reduce((s, p) => s + p.amount, 0) * 100) / 100;
-
-      if (total > 0 && input.payments.length === 0) {
-        return { error: "Selecione ao menos um cartão para o valor restante." };
-      }
-      if (Math.abs(paySum - total) > 0.05) {
-        return { error: "A soma dos cartões deve cobrir o total após os cupons." };
-      }
-      if (total > 0 && input.payments.some((p) => p.amount < 10 && total >= 10)) {
-        return { error: "Cada cartão deve receber no mínimo R$ 10,00." };
-      }
-
-      const payments: PaymentSplit[] = input.payments.map((p) => {
-        const card = current.cards.find((c) => c.id === p.cardId);
-        return {
-          cardId: p.cardId,
-          last4: card?.last4 ?? "0000",
-          brand: card?.brand ?? "Cartão",
-          amount: p.amount,
-        };
-      });
-
-      let address = input.address;
-      let customers = state.customers;
-      if (input.saveAddress && !current.addresses.some((a) => a.id === address.id)) {
-        const addrErr = validateAddress(address);
-        if (addrErr) return { error: addrErr };
-        if (addressLabelTaken(current.addresses, address.label)) {
-          return { error: "Já existe um endereço com esse apelido." };
-        }
-        address = { ...address, id: address.id || uid("addr"), label: address.label.trim() };
-        customers = customers.map((c) =>
-          c.id === current.id ? { ...c, addresses: [...c.addresses, address] } : c
-        );
-      }
-
-      const order: Order = {
-        id: `3DS-${Date.now().toString().slice(-6)}`,
-        customerId: current.id,
-        customerEmail: current.email,
-        customerName: current.name,
-        createdAt: new Date().toISOString(),
-        status: "EM_ABERTO",
-        history: [{ status: "EM_ABERTO", at: new Date().toISOString(), by: "cliente" }],
-        items: input.items,
-        address,
-        shipping: input.shipping,
-        coupons: coupons.map((c) => ({ code: c.code, type: c.type, value: c.value })),
-        payments,
-        subtotal,
-        shippingPrice: input.shipping.price,
-        discount,
-        total,
-      };
-
-      const usedIds = new Set(coupons.map((c) => c.id));
-      patch((s) => ({
-        ...s,
-        customers,
-        orders: [order, ...s.orders],
-        coupons: s.coupons.map((c) => (usedIds.has(c.id) ? { ...c, used: true } : c)),
-      }));
-      setLastOrderId(order.id);
-      sessionStorage.setItem("3dstore-last-order-id", order.id);
-      return order.id;
-    };
-
-    const setOrderStatus = (
-      id: string,
-      status: OrderStatus,
-      by: "cliente" | "admin" | "sistema",
-      extra?: Partial<Order>
-    ) => {
-      const at = new Date().toISOString();
-      patch((s) => ({
-        ...s,
-        orders: s.orders.map((o) =>
-          o.id === id
-            ? {
-                ...o,
-                ...extra,
-                status,
-                history: [...o.history, { status, at, by }],
-              }
-            : o
-        ),
-      }));
-    };
-
-    const cancelOrder: StoreValue["cancelOrder"] = (id) => {
-      const order = state.orders.find((o) => o.id === id);
-      if (!order || order.customerId !== current?.id) return "Pedido não encontrado.";
-      if (!canCancel(order.status)) return "Este pedido não pode mais ser cancelado.";
-      setOrderStatus(id, "CANCELADO", "cliente");
-      return null;
-    };
-
-    const confirmReceipt: StoreValue["confirmReceipt"] = (id) => {
-      const order = state.orders.find((o) => o.id === id);
-      if (!order || order.customerId !== current?.id) return "Pedido não encontrado.";
-      if (!canConfirmReceipt(order.status, order)) {
-        return isPickup(order)
-          ? "A retirada só pode ser confirmada após o pagamento."
-          : "Só é possível confirmar após o envio.";
-      }
-      setOrderStatus(id, "ENTREGUE", "cliente");
-      return null;
-    };
-
-    const requestExchange: StoreValue["requestExchange"] = (orderId, itemId, qty) => {
-      const order = state.orders.find((o) => o.id === orderId);
-      if (!order || order.customerId !== current?.id) return "Pedido não encontrado.";
-      if (!canRequestExchange(order.status)) return "A troca só pode ser pedida após a entrega.";
-      const item = order.items.find((i) => i.id === itemId);
-      if (!item) return "Item não encontrado.";
-      if (qty < 1 || qty > item.quantity) return "Quantidade inválida.";
-      setOrderStatus(orderId, "TROCA_SOLICITADA", "cliente", {
-        exchangeItemId: itemId,
-        exchangeQty: qty,
-      });
-      return null;
-    };
-
-    const dispatchExchangeItem: StoreValue["dispatchExchangeItem"] = (orderId) => {
-      const order = state.orders.find((o) => o.id === orderId);
-      if (!order || order.customerId !== current?.id) return "Pedido não encontrado.";
-      if (!canDispatchItem(order.status)) return "Aguarde a aceitação da troca.";
-      setOrderStatus(orderId, "ITEM_ENVIADO", "cliente");
-      return null;
-    };
-
-    const adminSetStatus: StoreValue["adminSetStatus"] = (orderId, status) => {
-      if (current?.role !== "admin") return "Acesso restrito.";
-      const order = state.orders.find((o) => o.id === orderId);
-      if (!order) return "Pedido não encontrado.";
-      const allowed = adminTransitions(order.status, order);
-      if (!allowed.includes(status)) return "Transição de status inválida.";
-      if (status === "EM_TRANSITO" && isPickup(order)) {
-        return "Pedidos de retirada no ateliê não entram em trânsito.";
-      }
-      if (status === "PAGAMENTO_REALIZADO") {
-        return "O pagamento é confirmado automaticamente pelo sistema.";
-      }
-
-      if (status === "EM_PROCESSAMENTO") {
-        const at = new Date().toISOString();
-        patch((s) => ({
-          ...s,
-          orders: s.orders.map((o) => {
-            if (o.id !== orderId) return o;
-            const processing: Order = {
-              ...o,
-              status: "EM_PROCESSAMENTO",
-              history: [...o.history, { status: "EM_PROCESSAMENTO", at, by: "admin" as const }],
-            };
-            return settlePaymentIfDue(processing, new Date(Date.now() + 1000).toISOString());
-          }),
-        }));
+    const login = async (email: string, password: string) => {
+      try {
+        const data = await api<Snapshot>("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        });
+        apply(data);
         return null;
+      } catch (err) {
+        return err instanceof ApiError ? err.message : "E-mail ou senha inválidos.";
       }
+    };
 
-      if (status === "TROCA_PROCESSADA") {
-        const item = order.items.find((i) => i.id === order.exchangeItemId) ?? order.items[0];
-        const line = item ? item.unitPrice * (order.exchangeQty ?? item.quantity) : 0;
-        const value =
-          order.subtotal > 0 ? Math.min(100, Math.max(1, Math.round((line / order.subtotal) * 100))) : 10;
-        const coupon: Coupon = {
-          id: uid("c"),
-          code: `TROCA-${order.id.slice(-6)}`,
-          type: "troca",
-          value,
-          ownerEmail: order.customerEmail,
-          used: false,
-          description: `${value}% de desconto pela troca do pedido ${order.id}`,
-        };
-        const at = new Date().toISOString();
-        patch((s) => ({
-          ...s,
-          coupons: [...s.coupons, coupon],
-          orders: s.orders.map((o) =>
-            o.id === orderId
-              ? {
-                  ...o,
-                  status,
-                  history: [...o.history, { status, at, by: "admin" as const }],
-                }
-              : o
-          ),
-        }));
+    const signup: StoreValue["signup"] = async (payload) => {
+      try {
+        const data = await api<Snapshot>("/api/auth/signup", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        apply(data);
         return null;
+      } catch (err) {
+        return err instanceof ApiError ? err.message : "Não foi possível cadastrar.";
       }
+    };
 
-      if (status === "TROCA_NEGADA") {
-        setOrderStatus(orderId, "TROCA_NEGADA", "admin");
-        return null;
+    const logout = async () => {
+      const data = await api<Snapshot>("/api/auth/logout", { method: "POST" });
+      apply(data);
+    };
+
+    const updateProfile: StoreValue["updateProfile"] = async (payload) => {
+      const { error } = await mutate("/api/account", { method: "PATCH", body: JSON.stringify(payload) });
+      return error;
+    };
+
+    const changePassword: StoreValue["changePassword"] = async (currentPassword, next, confirm) => {
+      const { error } = await mutate("/api/account/password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, next, confirm }),
+      });
+      return error;
+    };
+
+    const deleteAccount = async () => {
+      const { error } = await mutate("/api/account", { method: "DELETE" });
+      return error;
+    };
+
+    const setCustomerStatus: StoreValue["setCustomerStatus"] = async (id, status) => {
+      const { error } = await mutate(`/api/admin/customers/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      return error;
+    };
+
+    const addAddress: StoreValue["addAddress"] = async (address) => {
+      const { data, error } = await mutate("/api/account/addresses", {
+        method: "POST",
+        body: JSON.stringify(address),
+      });
+      if (error) return { error };
+      return (data.address as Address) ?? { error: "Não foi possível salvar o endereço." };
+    };
+
+    const updateAddress: StoreValue["updateAddress"] = async (address) => {
+      const { error } = await mutate(`/api/account/addresses/${address.id}`, {
+        method: "PUT",
+        body: JSON.stringify(address),
+      });
+      return error;
+    };
+
+    const removeAddress: StoreValue["removeAddress"] = async (id) => {
+      const { error } = await mutate(`/api/account/addresses/${id}`, { method: "DELETE" });
+      return error;
+    };
+
+    const addCard: StoreValue["addCard"] = async (card) => {
+      const { data, error } = await mutate("/api/account/cards", {
+        method: "POST",
+        body: JSON.stringify(card),
+      });
+      if (error) return { error };
+      return (data.card as Card) ?? { error: "Não foi possível salvar o cartão." };
+    };
+
+    const removeCard: StoreValue["removeCard"] = async (id) => {
+      await mutate(`/api/account/cards/${id}`, { method: "DELETE" });
+    };
+
+    const setPreferredCard: StoreValue["setPreferredCard"] = async (id) => {
+      const { error } = await mutate(`/api/account/cards/${id}/preferred`, { method: "POST" });
+      return error;
+    };
+
+    const addProduct: StoreValue["addProduct"] = async (payload) => {
+      const { data, error } = await mutate("/api/admin/products", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (error) return { error };
+      return String(data.id ?? "");
+    };
+
+    const updateProduct: StoreValue["updateProduct"] = async (product) => {
+      const { error } = await mutate(`/api/admin/products/${product.id}`, {
+        method: "PUT",
+        body: JSON.stringify(product),
+      });
+      return error;
+    };
+
+    const deleteProduct: StoreValue["deleteProduct"] = async (id) => {
+      const { error } = await mutate(`/api/admin/products/${id}`, { method: "DELETE" });
+      return error;
+    };
+
+    const addCoupon: StoreValue["addCoupon"] = async (payload) => {
+      const { data, error } = await mutate("/api/admin/coupons", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (error) return { error };
+      return String(data.id ?? "");
+    };
+
+    const removeCoupon: StoreValue["removeCoupon"] = async (id) => {
+      const { error } = await mutate(`/api/admin/coupons/${id}`, { method: "DELETE" });
+      return error;
+    };
+
+    const quoteCheckout: StoreValue["quoteCheckout"] = async (input) => {
+      try {
+        return await api<QuoteResult>("/api/checkout/quote", {
+          method: "POST",
+          body: JSON.stringify(input),
+        });
+      } catch (err) {
+        return { error: err instanceof ApiError ? err.message : "Não foi possível calcular o pedido." };
       }
+    };
 
-      setOrderStatus(orderId, status, "admin");
-      return null;
+    const placeOrder: StoreValue["placeOrder"] = async (input) => {
+      const { data, error } = await mutate("/api/orders", {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      if (error) return { error };
+      return String(data.id ?? "");
+    };
+
+    const cancelOrder: StoreValue["cancelOrder"] = async (id) => {
+      const { error } = await mutate(`/api/orders/${id}/cancel`, { method: "POST" });
+      return error;
+    };
+
+    const confirmReceipt: StoreValue["confirmReceipt"] = async (id) => {
+      const { error } = await mutate(`/api/orders/${id}/confirm-receipt`, { method: "POST" });
+      return error;
+    };
+
+    const requestExchange: StoreValue["requestExchange"] = async (orderId, itemId, qty) => {
+      const { error } = await mutate(`/api/orders/${orderId}/exchange`, {
+        method: "POST",
+        body: JSON.stringify({ itemId, qty }),
+      });
+      return error;
+    };
+
+    const dispatchExchangeItem: StoreValue["dispatchExchangeItem"] = async (orderId) => {
+      const { error } = await mutate(`/api/orders/${orderId}/dispatch-item`, { method: "POST" });
+      return error;
+    };
+
+    const adminSetStatus: StoreValue["adminSetStatus"] = async (orderId, status) => {
+      const { error } = await mutate(`/api/admin/orders/${orderId}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      });
+      return error;
+    };
+
+    const loadChart: StoreValue["loadChart"] = async (categoryIds = []) => {
+      try {
+        const qs = categoryIds.length ? `?categories=${categoryIds.join(",")}` : "";
+        return await api<ChartData>(`/api/admin/chart${qs}`);
+      } catch (err) {
+        return { error: err instanceof ApiError ? err.message : "Não foi possível carregar o gráfico." };
+      }
+    };
+
+    const searchCustomers: StoreValue["searchCustomers"] = async (filter) => {
+      const params = new URLSearchParams();
+      Object.entries(filter).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
+      const data = await api<{ customers: Customer[] }>(`/api/admin/customers?${params.toString()}`);
+      return data.customers;
     };
 
     return {
-      user,
-      customers: state.customers
-        .filter((c) => c.role === "client")
-        .map((c) => ({ ...toPublic(c), ranking: customerRanking(state.orders, c.id) })),
+      ready,
+      user: state.user,
+      customers: state.customers,
       orders: state.orders,
       coupons: state.coupons,
       catalog: state.catalog,
@@ -782,17 +394,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteProduct,
       addCoupon,
       removeCoupon,
-      myOrders: current ? state.orders.filter((o) => o.customerId === current.id) : [],
-      myCoupons: current ? availableCoupons(state.coupons, current.email) : [],
+      myOrders: state.myOrders,
+      myCoupons: state.myCoupons,
+      myUsedCoupons: state.myUsedCoupons,
+      quoteCheckout,
       placeOrder,
       cancelOrder,
       confirmReceipt,
       requestExchange,
       dispatchExchangeItem,
       adminSetStatus,
-      lastOrderId,
+      loadChart,
+      searchCustomers,
+      lastOrderId: state.lastOrderId,
     };
-  }, [current, lastOrderId, patch, state.catalog, state.coupons, state.customers, state.orders, state.sessionId]);
+  }, [apply, ready, state]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

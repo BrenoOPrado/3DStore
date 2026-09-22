@@ -27,16 +27,16 @@ export function AccountAddressesPage() {
     setMsg(null);
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (editing) {
-      const err = updateAddress({ ...form, id: editing.id });
+      const err = await updateAddress({ ...form, id: editing.id });
       if (err) {
         setMsg(err);
         return;
       }
     } else {
-      const result = addAddress(form);
+      const result = await addAddress(form);
       if ("error" in result) {
         setMsg(result.error);
         return;
@@ -46,8 +46,8 @@ export function AccountAddressesPage() {
     setOpen(false);
   };
 
-  const onRemove = (id: string) => {
-    const err = removeAddress(id);
+  const onRemove = async (id: string) => {
+    const err = await removeAddress(id);
     if (err) setMsg(err);
     else setMsg(null);
   };

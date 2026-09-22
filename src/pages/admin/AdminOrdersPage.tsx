@@ -4,8 +4,6 @@ import { formatPrice } from "../../data/products";
 import {
   STATUS_ACTION,
   STATUS_LABEL,
-  adminTransitions,
-  adminWaitingMessage,
   formatAddress,
   formatPercent,
   type OrderStatus,
@@ -70,11 +68,11 @@ export function AdminOrderDetailPage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   if (!order) return <Navigate to="/admin/pedidos" replace />;
-  const next = adminTransitions(order.status, order);
-  const waiting = adminWaitingMessage(order.status, order);
+  const next = order.actions.adminNext;
+  const waiting = order.actions.waitingMessage;
 
-  const apply = (status: OrderStatus) => {
-    const err = adminSetStatus(order.id, status);
+  const apply = async (status: OrderStatus) => {
+    const err = await adminSetStatus(order.id, status);
     if (err) {
       setMsg(err);
       return;
@@ -151,7 +149,7 @@ export function AdminOrderDetailPage() {
         ) : next.length === 0 ? null : (
           <div className="account-actions wrap">
             {next.map((s) => (
-              <button key={s} type="button" className="btn-primary" onClick={() => apply(s)}>
+              <button key={s} type="button" className="btn-primary" onClick={() => void apply(s)}>
                 {STATUS_ACTION[s] ?? STATUS_LABEL[s]}
               </button>
             ))}

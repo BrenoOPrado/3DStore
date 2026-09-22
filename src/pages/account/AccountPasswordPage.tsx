@@ -9,9 +9,9 @@ export function AccountPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const err = changePassword(currentPassword, next, confirm);
+    const err = await changePassword(currentPassword, next, confirm);
     setMsg(err ?? "Senha alterada.");
     if (!err) {
       setCurrentPassword("");

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useStore } from "../../context/StoreContext";
-import { customerMatchesFilter, type CustomerFilter } from "../../data/customerRules";
+import { type CustomerFilter } from "../../data/customerRules";
+import type { Customer } from "../../data/commerce";
 
 const emptyFilter: CustomerFilter = {
   id: "",
@@ -14,21 +15,29 @@ const emptyFilter: CustomerFilter = {
 };
 
 export function AdminCustomersPage() {
-  const { customers, orders, setCustomerStatus } = useStore();
+  const { searchCustomers, setCustomerStatus } = useStore();
   const [filters, setFilters] = useState(emptyFilter);
+  const [list, setList] = useState<Customer[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
 
   const set = (key: keyof CustomerFilter) => (value: string) =>
     setFilters((p) => ({ ...p, [key]: value }));
 
-  const list = useMemo(
-    () => customers.filter((c) => customerMatchesFilter(c, filters)),
-    [customers, filters]
-  );
+  useEffect(() => {
+    let live = true;
+    searchCustomers(filters).then((rows) => {
+      if (live) setList(rows);
+    });
+    return () => {
+      live = false;
+    };
+  }, [filters, searchCustomers]);
 
-  const toggle = (id: string, status: "ativo" | "inativo") => {
-    const err = setCustomerStatus(id, status);
+  const toggle = async (id: string, status: "ativo" | "inativo") => {
+    const err = await setCustomerStatus(id, status);
     setMsg(err ?? (status === "ativo" ? "Cliente ativado." : "Cliente inativado."));
+    const rows = await searchCustomers(filters);
+    setList(rows);
   };
 
   return (
@@ -86,7 +95,7 @@ export function AdminCustomersPage() {
       )}
       <ul className="stack-list" data-testid="customer-list">
         {list.map((c) => {
-          const n = orders.filter((o) => o.customerId === c.id).length;
+          const n = c.orderCount ?? 0;
           return (
             <li key={c.id} className="panel card-surface" data-testid={`customer-${c.email}`}>
               <div className="order-row">
@@ -106,7 +115,7 @@ export function AdminCustomersPage() {
                   type="button"
                   className={c.status === "ativo" ? "btn-ghost" : "btn-primary btn-primary--sm"}
                   data-testid={`toggle-status-${c.email}`}
-                  onClick={() => toggle(c.id, c.status === "ativo" ? "inativo" : "ativo")}
+                  onClick={() => void toggle(c.id, c.status === "ativo" ? "inativo" : "ativo")}
                 >
                   {c.status === "ativo" ? "Inativar" : "Ativar"}
                 </button>
@@ -126,9 +135,9 @@ export function AdminCustomerDetailPage({ id }: { id: string }) {
   if (!c) return <p className="muted">Cliente não encontrado.</p>;
   const theirs = orders.filter((o) => o.customerId === c.id);
 
-  const toggle = () => {
+  const toggle = async () => {
     const next = c.status === "ativo" ? "inativo" : "ativo";
-    const err = setCustomerStatus(c.id, next);
+    const err = await setCustomerStatus(c.id, next);
     setMsg(err ?? (next === "ativo" ? "Cliente ativado." : "Cliente inativado."));
   };
 
@@ -146,7 +155,7 @@ export function AdminCustomerDetailPage({ id }: { id: string }) {
           type="button"
           className={c.status === "ativo" ? "btn-ghost" : "btn-primary"}
           data-testid="toggle-customer-status"
-          onClick={toggle}
+          onClick={() => void toggle()}
         >
           {c.status === "ativo" ? "Inativar cliente" : "Ativar cliente"}
         </button>

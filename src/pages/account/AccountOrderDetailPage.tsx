@@ -4,13 +4,8 @@ import { formatPrice } from "../../data/products";
 import {
   STATUS_ACTION,
   STATUS_LABEL,
-  canCancel,
-  canConfirmReceipt,
-  canDispatchItem,
-  canRequestExchange,
   formatAddress,
   formatPercent,
-  isPickup,
 } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
 
@@ -30,8 +25,8 @@ export function AccountOrderDetailPage() {
 
   if (!order) return <Navigate to="/conta/pedidos" replace />;
 
-  const run = (fn: () => string | null) => {
-    const err = fn();
+  const run = async (fn: () => Promise<string | null>) => {
+    const err = await fn();
     setMsg(err ?? "Atualizado.");
   };
 
@@ -109,38 +104,36 @@ export function AccountOrderDetailPage() {
       <section className="panel card-surface">
         <h2 className="panel__title">Ações do cliente</h2>
         <div className="account-actions wrap">
-          {canCancel(order.status) && (
-            <button type="button" className="btn-ghost" onClick={() => run(() => cancelOrder(order.id))}>
+          {order.actions.cancel && (
+            <button type="button" className="btn-ghost" onClick={() => void run(() => cancelOrder(order.id))}>
               Cancelar
             </button>
           )}
-          {canConfirmReceipt(order.status, order) && (
+          {order.actions.confirmReceipt && (
             <button
               type="button"
               className="btn-primary"
-              onClick={() => run(() => confirmReceipt(order.id))}
+              onClick={() => void run(() => confirmReceipt(order.id))}
             >
-              {isPickup(order) ? "Retirei" : STATUS_ACTION.ENTREGUE}
+              {order.actions.pickup ? "Retirei" : STATUS_ACTION.ENTREGUE}
             </button>
           )}
-          {canDispatchItem(order.status) && (
+          {order.actions.dispatchItem && (
             <button
               type="button"
               className="btn-primary"
-              onClick={() => run(() => dispatchExchangeItem(order.id))}
+              onClick={() => void run(() => dispatchExchangeItem(order.id))}
             >
               {STATUS_ACTION.ITEM_ENVIADO}
             </button>
           )}
         </div>
-        {order.status === "EM_PROCESSAMENTO" && (
-          <p className="muted">O sistema está verificando se o pagamento foi realizado.</p>
-        )}
-        {order.status === "PAGAMENTO_REALIZADO" && isPickup(order) && (
+        {order.actions.waitingMessage && <p className="muted">{order.actions.waitingMessage}</p>}
+        {order.status === "PAGAMENTO_REALIZADO" && order.actions.pickup && (
           <p className="muted">O pedido está pronto. Retire no ateliê e confirme a retirada.</p>
         )}
 
-        {canRequestExchange(order.status) && (
+        {order.actions.requestExchange && (
           <div className="exchange-box">
             <p className="field__label">Solicitar troca de um item</p>
             <div className="account-actions wrap">
@@ -166,7 +159,7 @@ export function AccountOrderDetailPage() {
               <button
                 type="button"
                 className="btn-primary"
-                onClick={() => run(() => requestExchange(order.id, itemId, qty))}
+                onClick={() => void run(() => requestExchange(order.id, itemId, qty))}
               >
                 Solicitar troca
               </button>

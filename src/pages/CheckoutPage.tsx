@@ -1,18 +1,18 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { CreditCard, MapPin, Ticket, Truck } from "lucide-react";
 import { formatPrice } from "../data/products";
 import { useCart } from "../context/CartContext";
 import { useStore } from "../context/StoreContext";
 import {
-  calculateShipping,
   formatMoneyInput,
   maskCard,
   maskMoney,
   moneyKeyDown,
   parseMoney,
 } from "../data/checkout";
-import { addressLabelTaken, couponDiscount, couponPercentSum, formatPercent, uid, type Address, type OrderItem } from "../data/commerce";
+import { formatPercent, type Address } from "../data/commerce";
+import type { QuoteResult } from "../api/types";
 import { AddressFields, emptyAddress } from "../components/AddressFields";
 import { Field } from "../components/Field";
 
@@ -22,8 +22,8 @@ const blankAddress = (name: string, phone: string): Address => ({
 });
 
 export function CheckoutPage() {
-  const { detailed, subtotal, count, clear } = useCart();
-  const { user, myCoupons, addCard, placeOrder } = useStore();
+  const { detailed, count, clear } = useCart();
+  const { user, myCoupons, addCard, placeOrder, quoteCheckout } = useStore();
   const navigate = useNavigate();
 
   const [addressId, setAddressId] = useState(user?.addresses[0]?.id ?? "new");
@@ -38,18 +38,44 @@ export function CheckoutPage() {
   const [cardForm, setCardForm] = useState({ holder: "", number: "", expiry: "", cvv: "" });
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  const [quote, setQuote] = useState<QuoteResult | null>(null);
 
   const usingSaved = addressId !== "new" && user?.addresses.some((a) => a.id === addressId);
   const address = usingSaved ? user!.addresses.find((a) => a.id === addressId)! : newAddr;
+  const cartItems = useMemo(
+    () => detailed.map((item) => ({ productId: item.product.id, color: item.color, quantity: item.quantity })),
+    [detailed]
+  );
 
-  const options = useMemo(() => calculateShipping(address.cep), [address.cep]);
-  const shipping = options.find((o) => o.id === shippingId) ?? options[0];
-  const shippingPrice = shipping?.price ?? 0;
+  useEffect(() => {
+    if (!user) return;
+    let live = true;
+    quoteCheckout({
+      items: cartItems,
+      couponCodes: couponSel,
+      shippingId,
+      cep: address.cep,
+    }).then((result) => {
+      if (!live) return;
+      if ("error" in result) {
+        setQuote(null);
+        return;
+      }
+      setQuote(result);
+    });
+    return () => {
+      live = false;
+    };
+  }, [address.cep, cartItems, couponSel, quoteCheckout, shippingId, user]);
 
+  const options = quote?.options ?? [];
+  const shipping = quote?.shipping ?? options.find((o) => o.id === shippingId) ?? options[0];
+  const shippingPrice = quote?.shippingPrice ?? 0;
   const coupons = myCoupons.filter((c) => couponSel.includes(c.code));
-  const discount = couponDiscount(subtotal, coupons);
-  const discountPercent = couponPercentSum(coupons);
-  const total = Math.max(0, Math.round((subtotal + shippingPrice - discount) * 100) / 100);
+  const discount = quote?.discount ?? 0;
+  const discountPercent = quote?.discountPercent ?? 0;
+  const total = quote?.total ?? 0;
+  const subtotal = quote?.subtotal ?? 0;
 
   const selectedPays = Object.entries(cardSel)
     .map(([cardId, amount]) => ({ cardId, amount: parseMoney(amount) }))
@@ -96,8 +122,8 @@ export function CheckoutPage() {
     setCardSel(next);
   };
 
-  const onAddCard = () => {
-    const card = addCard({
+  const onAddCard = async () => {
+    const card = await addCard({
       holder: cardForm.holder,
       number: cardForm.number,
       expiry: cardForm.expiry,
@@ -112,35 +138,18 @@ export function CheckoutPage() {
     setCardForm({ holder: "", number: "", expiry: "", cvv: "" });
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!shipping) return setError("Informe um CEP válido para o frete.");
-
-    const items: OrderItem[] = detailed.map((item) => ({
-      id: uid("oi"),
-      productId: item.product.id,
-      name: item.product.name,
-      color: item.color,
-      quantity: item.quantity,
-      unitPrice: item.product.price,
-      line: item.line,
-      image: item.product.image,
-      category: item.product.category,
-    }));
-
-    const addr: Address = usingSaved ? address : { ...newAddr, id: uid("addr") };
-    if (!usingSaved && saveAddr && addressLabelTaken(user.addresses, addr.label)) {
-      setError("Já existe um endereço com esse apelido.");
-      return;
-    }
     setPlacing(true);
-    const result = placeOrder({
-      address: addr,
+    const result = await placeOrder({
+      addressId: usingSaved ? address.id : undefined,
+      address: usingSaved ? undefined : newAddr,
       saveAddress: !usingSaved && saveAddr,
-      shipping,
+      shippingId: shipping.id,
       couponCodes: couponSel,
       payments: selectedPays,
-      items,
+      items: cartItems,
     });
     if (typeof result !== "string") {
       setPlacing(false);
@@ -345,7 +354,7 @@ export function CheckoutPage() {
                 value={cardForm.cvv}
                 onChange={(v) => setCardForm((f) => ({ ...f, cvv: v.replace(/\D/g, "").slice(0, 4) }))}
               />
-              <button type="button" className="btn-primary" onClick={onAddCard}>
+              <button type="button" className="btn-primary" onClick={() => void onAddCard()}>
                 Salvar cartão
               </button>
             </div>

@@ -26,15 +26,15 @@ export function AccountProfilePage() {
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((p) => ({ ...p, [key]: value }));
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const err = updateProfile(form);
+    const err = await updateProfile(form);
     setMsg(err ?? "Cadastro atualizado.");
   };
 
-  const onDelete = () => {
+  const onDelete = async () => {
     if (!confirm("Excluir a conta? Esta ação remove o cadastro e não pode ser desfeita. Não é inativação.")) return;
-    const err = deleteAccount();
+    const err = await deleteAccount();
     if (err) {
       setMsg(err);
       return;

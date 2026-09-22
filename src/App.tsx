@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { StoreProvider } from "./context/StoreContext";
+import type { ReactNode } from "react";
+import { StoreProvider, useStore } from "./context/StoreContext";
 import { CartProvider } from "./context/CartContext";
 import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/HomePage";
@@ -26,11 +27,24 @@ import { AdminCustomerRoute, AdminOrderDetailPage, AdminOrdersPage } from "./pag
 import { AdminProductsPage } from "./pages/admin/AdminProductsPage";
 import { AdminCouponsPage } from "./pages/admin/AdminCouponsPage";
 
+function Boot({ children }: { children: ReactNode }) {
+  const { ready } = useStore();
+  if (!ready) {
+    return (
+      <p className="muted" style={{ padding: 48 }}>
+        Carregando a loja…
+      </p>
+    );
+  }
+  return children;
+}
+
 export default function App() {
   return (
     <StoreProvider>
       <CartProvider>
         <BrowserRouter>
+          <Boot>
           <Routes>
             <Route element={<Layout />}>
               <Route path="/" element={<HomePage />} />
@@ -64,6 +78,7 @@ export default function App() {
               <Route path="cupons" element={<AdminCouponsPage />} />
             </Route>
           </Routes>
+          </Boot>
         </BrowserRouter>
       </CartProvider>
     </StoreProvider>

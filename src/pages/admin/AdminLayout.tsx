@@ -36,7 +36,7 @@ export function AdminLayout() {
         <Link to="/conta" className="ghost-link">
           Minha conta
         </Link>
-        <button type="button" className="ghost-link" data-testid="logout" onClick={logout}>
+        <button type="button" className="ghost-link" data-testid="logout" onClick={() => void logout()}>
           Sair
         </button>
       </aside>

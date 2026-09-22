@@ -19,9 +19,9 @@ export function AccountCardsPage() {
 
   if (!user) return null;
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const result = addCard({
+    const result = await addCard({
       holder: form.holder,
       number: form.number,
       expiry: form.expiry,
@@ -73,12 +73,12 @@ export function AccountCardsPage() {
                   type="button"
                   className="ghost-link"
                   data-testid={`prefer-card-${c.last4}`}
-                  onClick={() => setPreferredCard(c.id)}
+                  onClick={() => void setPreferredCard(c.id)}
                 >
                   Preferencial
                 </button>
               )}
-              <button type="button" className="ghost-link" data-testid={`remove-card-${c.last4}`} onClick={() => removeCard(c.id)}>
+              <button type="button" className="ghost-link" data-testid={`remove-card-${c.last4}`} onClick={() => void removeCard(c.id)}>
                 Remover
               </button>
             </div>

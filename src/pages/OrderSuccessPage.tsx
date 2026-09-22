@@ -5,10 +5,10 @@ import { useStore } from "../context/StoreContext";
 import { formatAddress } from "../data/commerce";
 
 export function OrderSuccessPage() {
-  const { lastOrderId, orders, user } = useStore();
+  const { lastOrderId, myOrders, user } = useStore();
   const order =
-    orders.find((o) => o.id === lastOrderId) ??
-    orders.find((o) => o.customerId === user?.id);
+    myOrders.find((o) => o.id === lastOrderId) ??
+    myOrders.find((o) => o.customerId === user?.id);
 
   if (!order) {
     return (

@@ -35,9 +35,9 @@ export function AdminCouponsPage() {
     setMsg(null);
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const result = addCoupon({
+    const result = await addCoupon({
       code: form.code,
       value: Number(form.value),
       description: form.description,
@@ -53,9 +53,9 @@ export function AdminCouponsPage() {
     setForm(blank);
   };
 
-  const onDelete = (id: string, code: string) => {
+  const onDelete = async (id: string, code: string) => {
     if (!window.confirm(`Excluir o cupom ${code}?`)) return;
-    const err = removeCoupon(id);
+    const err = await removeCoupon(id);
     setMsg(err ?? "Cupom excluído.");
   };
 

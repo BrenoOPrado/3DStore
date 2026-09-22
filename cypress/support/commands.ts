@@ -82,9 +82,10 @@ declare global {
 }
 
 Cypress.Commands.add("resetStore", () => {
+  cy.request("POST", "/api/dev/reset");
   cy.visit("/", {
     onBeforeLoad(win) {
-      win.localStorage.removeItem("3dstore-commerce-v2");
+      win.localStorage.clear();
       win.sessionStorage.clear();
     },
   });

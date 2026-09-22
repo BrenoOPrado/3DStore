@@ -1,27 +1,6 @@
 # 3D Store
 
-Loja virtual de peças impressas em 3D. O visitante navega por categorias, vê detalhes do produto, escolhe cor e quantidade, monta um carrinho e cria uma conta — tudo no navegador, sem backend.
-
-## O que o site faz
-
-- Home com categorias, destaques e chamada para o ateliê
-- Catálogo com filtro por categoria, busca e ordenação
-- Página de produto (cor, quantidade, itens relacionados)
-- Carrinho persistido no `localStorage`
-- Cadastro e login locais (sem servidor)
-- Lançamentos (itens marcados como novos) e página Sobre nós
-
-## Stack
-
-| Camada | Tecnologia |
-| --- | --- |
-| UI | React 19 + TypeScript |
-| Rotas | React Router 7 |
-| Estilo | CSS em `src/index.css` |
-| Ícones | lucide-react |
-| Build | Vite 7 |
-
-Não há API, banco nem gateway de pagamento. Catálogo, contas e carrinho vivem no cliente.
+Loja virtual de peças impressas em 3D. O **frontend** (React) só exibe a interface e chama a API. O **backend** guarda os dados e aplica as regras de negócio.
 
 ## Como rodar
 
@@ -32,29 +11,37 @@ npm install
 npm run dev
 ```
 
-Abra [http://localhost:5173/](http://localhost:5173/).
+Isso sobe a API em [http://127.0.0.1:3001](http://127.0.0.1:3001) e o site em [http://127.0.0.1:5173](http://127.0.0.1:5173/). O Vite encaminha `/api` para o backend.
 
 ```bash
-npm run build    # typecheck + bundle de produção
-npm run preview  # serve a pasta dist
+npm run dev:api   # só a API
+npm run dev:web   # só o frontend (precisa da API)
+npm run build     # typecheck + bundle
+npm run test:e2e  # Cypress
 ```
+
+Contas de demonstração: `ana.souza@email.com` / `123456` e `admin@3dstore.com` / `admin123`.
+
+## Stack
+
+| Camada | Tecnologia |
+| --- | --- |
+| Frontend | React 19 + TypeScript + Vite 7 |
+| Backend | Express + TypeScript (`backend/`) |
+| Sessão | cookie HTTP-only |
+| Dados | JSON em `backend/data/store.json` (gerado na primeira execução) |
+
+O catálogo, clientes, pedidos, cupons, frete, descontos e transições de status vivem no backend. O navegador não persiste o comércio em `localStorage` — só o carrinho da sessão de compra.
 
 ## Estrutura
 
 ```
-src/
-  App.tsx                 rotas
-  context/                carrinho e autenticação
-  data/products.ts        catálogo e categorias
-  components/             header, footer, cards, layout
-  pages/                  telas
-public/products/          fotos dos itens
-docs/especificacao.md     especificações
+backend/src/          API, regras e persistência
+src/                  interface React
+public/products/      fotos do catálogo
+cypress/              testes de ponta a ponta
+docs/especificacao.md
 ```
-
-## Catálogo
-
-Treze peças funcionais (vasos, utilitários, decoração, games, cutelaria e acessórios), com fotos em `public/products/`. Miniaturas são sempre quadradas para os cards ficarem do mesmo tamanho, mesmo quando a foto original é uma colagem vertical.
 
 ## Licença e contexto
 

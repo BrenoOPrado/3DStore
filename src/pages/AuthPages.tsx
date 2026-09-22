@@ -16,9 +16,9 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const err = login(email, password);
+    const err = await login(email, password);
     if (err) setError(err);
     else {
       const isAdmin = email.toLowerCase() === "admin@3dstore.com";
@@ -84,9 +84,9 @@ export function SignupPage() {
 
   const set = (key: keyof typeof form) => (value: string) => setForm((p) => ({ ...p, [key]: value }));
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const err = signup({
+    const err = await signup({
       ...form,
       address: { ...address, recipient: address.recipient || form.name },
     });

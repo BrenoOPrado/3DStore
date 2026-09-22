@@ -3,13 +3,9 @@ import { formatPercent } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
 
 export function AccountCouponsPage() {
-  const { myCoupons, coupons, user } = useStore();
+  const { myCoupons, myUsedCoupons } = useStore();
   const available = myCoupons;
-  const used = coupons.filter(
-    (c) =>
-      c.used &&
-      (c.type === "promocional" || c.ownerEmail?.toLowerCase() === user?.email.toLowerCase())
-  );
+  const used = myUsedCoupons;
 
   return (
     <div>
