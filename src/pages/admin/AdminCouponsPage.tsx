@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
-import { formatPercent, type CouponType } from "../../data/commerce";
+import { formatCouponValue, type CouponType } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
 import { Field } from "../../components/Field";
 
@@ -39,7 +39,7 @@ export function AdminCouponsPage() {
     e.preventDefault();
     const result = await addCoupon({
       code: form.code,
-      value: Number(form.value),
+      value: Number(form.value.replace(",", ".")),
       description: form.description,
       type: form.type,
       ownerEmail: form.type === "troca" ? form.ownerEmail : undefined,
@@ -69,8 +69,7 @@ export function AdminCouponsPage() {
         </button>
       </div>
       <p className="page-lead">
-        Promocionais da loja e de troca. O desconto é em porcentagem. Clientes aplicam o código no
-        checkout.
+        Promocionais da loja e de troca. O valor é em reais. Clientes aplicam o código no checkout.
       </p>
       <input
         className="field__control search-filter"
@@ -96,7 +95,7 @@ export function AdminCouponsPage() {
                   {c.used ? " · usado" : ""}
                 </p>
               </div>
-              <p className="product-card__price">{formatPercent(c.value)}</p>
+              <p className="product-card__price">{formatCouponValue(c.value)}</p>
               <button type="button" className="ghost-link" onClick={() => onDelete(c.id, c.code)}>
                 Excluir
               </button>
@@ -117,11 +116,11 @@ export function AdminCouponsPage() {
               placeholder="PRINT10"
             />
             <Field
-              label="Desconto (%)"
+              label="Valor (R$)"
               value={form.value}
-              onChange={(v) => setForm((f) => ({ ...f, value: v.replace(/\D/g, "").slice(0, 3) }))}
-              inputMode="numeric"
-              placeholder="10"
+              onChange={(v) => setForm((f) => ({ ...f, value: v.replace(/[^\d.,]/g, "").slice(0, 10) }))}
+              inputMode="decimal"
+              placeholder="20,00"
             />
             <label className="field">
               <span className="field__label">Tipo</span>
@@ -158,7 +157,7 @@ export function AdminCouponsPage() {
               onChange={(v) => setForm((f) => ({ ...f, description: v }))}
               required={false}
               wide
-              placeholder="10% off em qualquer pedido"
+              placeholder="R$ 20 de desconto"
             />
           </div>
           <div className="account-actions">

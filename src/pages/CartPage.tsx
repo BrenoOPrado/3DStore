@@ -5,7 +5,7 @@ import { useCart } from "../context/CartContext";
 import { useStore } from "../context/StoreContext";
 
 export function CartPage() {
-  const { detailed, setQty, remove, subtotal, clear, count } = useCart();
+  const { detailed, setQty, remove, subtotal, clear, count, error } = useCart();
   const { user } = useStore();
 
   if (count === 0) {
@@ -29,9 +29,13 @@ export function CartPage() {
             Limpar
           </button>
         </div>
-        <ul className="cart-list">
+        <ul className="cart-list" data-testid="cart-list">
           {detailed.map((item) => (
-            <li key={`${item.product.id}-${item.color}`} className="cart-item card-surface">
+            <li
+              key={`${item.product.id}-${item.color}`}
+              className="cart-item card-surface"
+              data-testid={`cart-item-${item.product.id}`}
+            >
               <img src={item.product.image} alt="" className="cart-item__img" />
               <div className="cart-item__body">
                 <div className="cart-item__top">
@@ -40,6 +44,7 @@ export function CartPage() {
                       {item.product.name}
                     </Link>
                     <p className="cart-item__color">{item.color}</p>
+                    <p className="muted">Estoque: {item.stock}</p>
                   </div>
                   <p className="cart-item__line">{formatPrice(item.line)}</p>
                 </div>
@@ -47,13 +52,16 @@ export function CartPage() {
                   <div className="qty qty--sm">
                     <button
                       type="button"
+                      data-testid={`qty-minus-${item.product.id}`}
                       onClick={() => setQty(item.product.id, item.color, item.quantity - 1)}
                     >
                       <Minus size={14} />
                     </button>
-                    <span>{item.quantity}</span>
+                    <span data-testid={`qty-value-${item.product.id}`}>{item.quantity}</span>
                     <button
                       type="button"
+                      data-testid={`qty-plus-${item.product.id}`}
+                      disabled={item.quantity >= item.stock}
                       onClick={() => setQty(item.product.id, item.color, item.quantity + 1)}
                     >
                       <Plus size={14} />
@@ -64,6 +72,7 @@ export function CartPage() {
                     onClick={() => remove(item.product.id, item.color)}
                     className="icon-muted"
                     aria-label="Remover"
+                    data-testid={`remove-${item.product.id}`}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -72,6 +81,11 @@ export function CartPage() {
             </li>
           ))}
         </ul>
+        {error && (
+          <p className="form-error" data-testid="cart-error">
+            {error}
+          </p>
+        )}
       </div>
       <aside className="summary card-surface">
         <h2>Resumo</h2>
@@ -91,6 +105,7 @@ export function CartPage() {
           to={user ? "/checkout" : "/entrar"}
           state={user ? undefined : { from: "/checkout" }}
           className="btn-primary btn-primary--block"
+          data-testid="go-checkout"
         >
           {user ? "Finalizar compra" : "Entrar para finalizar"}
         </Link>

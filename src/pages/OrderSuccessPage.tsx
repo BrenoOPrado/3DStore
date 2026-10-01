@@ -31,11 +31,13 @@ export function OrderSuccessPage() {
     <div className="success">
       <div className="success__hero">
         <CheckCircle2 className="icon-cyan" size={56} strokeWidth={1.5} />
-        <p className="success__kicker">Pedido {order.id}</p>
-        <h1>Pedido em aberto</h1>
+        <p className="success__kicker" data-testid="order-id">Pedido {order.id}</p>
+        <h1 data-testid="order-status-title">Pedido em processamento</h1>
         <p className="success__lead">
-          {order.customerName}, recebemos o pedido. Quando o ateliê processar, o sistema confirma o
-          pagamento automaticamente.
+          {order.customerName}, o pedido foi registrado com status EM PROCESSAMENTO.
+        </p>
+        <p className="muted" data-testid="order-status">
+          Status: Em processamento
         </p>
       </div>
 
@@ -77,6 +79,11 @@ export function OrderSuccessPage() {
             <span>Total</span>
             <span>{formatPrice(order.total)}</span>
           </p>
+          {order.exchangeCouponCode && (
+            <p className="form-ok" data-testid="generated-coupon">
+              Cupom de troca {order.exchangeCouponCode} de {formatPrice(order.exchangeCouponValue ?? 0)} gerado pela diferença.
+            </p>
+          )}
         </div>
       </section>
 

@@ -68,6 +68,17 @@ export const trabalhoAddress: TestAddress = {
   country: "Brasil",
 };
 
+export const apartamentoAddress: TestAddress = {
+  label: "Apartamento",
+  street: "Oscar Freire",
+  number: "200",
+  neighborhood: "Jardins",
+  cep: "01426001",
+  city: "Sao Paulo",
+  state: "SP",
+  country: "Brasil",
+};
+
 declare global {
   namespace Cypress {
     interface Chainable {
@@ -77,6 +88,8 @@ declare global {
       signupClient(client: TestClient, address?: Partial<TestAddress>): Chainable<void>;
       loginAs(email: string, password: string): Chainable<void>;
       logoutUi(): Chainable<void>;
+      addToCart(productId: string, qty?: number): Chainable<void>;
+      payCard(last4: string, amountDigits: string): Chainable<void>;
     }
   }
 }
@@ -136,6 +149,23 @@ Cypress.Commands.add("loginAs", (email, password) => {
 
 Cypress.Commands.add("logoutUi", () => {
   cy.get('[data-testid="logout"]').click();
+});
+
+Cypress.Commands.add("addToCart", (productId, qty = 1) => {
+  cy.visit(`/produto/${productId}`);
+  cy.get('[data-testid="add-to-cart"]').should("exist");
+  if (qty > 1) {
+    for (let i = 1; i < qty; i++) {
+      cy.get('[data-testid="qty-plus"]').click();
+    }
+  }
+  cy.get('[data-testid="qty-value"]').should("contain", String(qty));
+  cy.get('[data-testid="add-to-cart"]').click();
+  cy.contains("Adicionado");
+});
+
+Cypress.Commands.add("payCard", (last4, amountDigits) => {
+  cy.get(`[data-testid="pay-amount-${last4}"]`).clear().type(amountDigits);
 });
 
 export {};

@@ -7,14 +7,16 @@ import { useStore } from "../context/StoreContext";
 import {
   formatMoneyInput,
   maskCard,
+  maskExpiry,
   maskMoney,
   moneyKeyDown,
   parseMoney,
 } from "../data/checkout";
-import { formatPercent, type Address } from "../data/commerce";
+import { formatCouponValue, type Address } from "../data/commerce";
 import type { QuoteResult } from "../api/types";
 import { AddressFields, emptyAddress } from "../components/AddressFields";
-import { Field } from "../components/Field";
+import { Field, SelectField } from "../components/Field";
+import { CARD_BRANDS } from "../data/customerRules";
 
 const blankAddress = (name: string, phone: string): Address => ({
   id: "",
@@ -35,7 +37,15 @@ export function CheckoutPage() {
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
   const [cardSel, setCardSel] = useState<Record<string, string>>({});
   const [addingCard, setAddingCard] = useState(false);
-  const [cardForm, setCardForm] = useState({ holder: "", number: "", expiry: "", cvv: "" });
+  const [cardForm, setCardForm] = useState({ holder: "", number: "", expiry: "", cvv: "", brand: "Visa" });
+  const [saveCard, setSaveCard] = useState(true);
+  const [pendingCard, setPendingCard] = useState<{
+    holder: string;
+    number: string;
+    expiry: string;
+    cvv: string;
+    brand: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [quote, setQuote] = useState<QuoteResult | null>(null);
@@ -59,8 +69,10 @@ export function CheckoutPage() {
       if (!live) return;
       if ("error" in result) {
         setQuote(null);
+        setCouponMsg(result.error);
         return;
       }
+      setCouponMsg(null);
       setQuote(result);
     });
     return () => {
@@ -73,7 +85,8 @@ export function CheckoutPage() {
   const shippingPrice = quote?.shippingPrice ?? 0;
   const coupons = myCoupons.filter((c) => couponSel.includes(c.code));
   const discount = quote?.discount ?? 0;
-  const discountPercent = quote?.discountPercent ?? 0;
+  const couponExcess = quote?.couponExcess ?? 0;
+  const freightNote = quote?.freightNote;
   const total = quote?.total ?? 0;
   const subtotal = quote?.subtotal ?? 0;
 
@@ -100,6 +113,10 @@ export function CheckoutPage() {
       setCouponMsg("Este cupom já foi aplicado.");
       return;
     }
+    if (found.type === "promocional" && couponSel.some((code) => myCoupons.find((c) => c.code === code)?.type === "promocional")) {
+      setCouponMsg("Apenas um cupom promocional pode ser utilizado por compra.");
+      return;
+    }
     setCouponSel((prev) => [...prev, found.code]);
     setCouponCode("");
     setCouponMsg(null);
@@ -123,25 +140,35 @@ export function CheckoutPage() {
   };
 
   const onAddCard = async () => {
+    if (!saveCard) {
+      setPendingCard({ ...cardForm });
+      setAddingCard(false);
+      setCardForm({ holder: "", number: "", expiry: "", cvv: "", brand: "Visa" });
+      setError(null);
+      return;
+    }
     const card = await addCard({
       holder: cardForm.holder,
       number: cardForm.number,
       expiry: cardForm.expiry,
       cvv: cardForm.cvv,
+      brand: cardForm.brand,
     });
     if ("error" in card) {
       setError(card.error);
       return;
     }
     setCardSel((p) => ({ ...p, [card.id]: formatMoneyInput(total) }));
+    setPendingCard(null);
     setAddingCard(false);
-    setCardForm({ holder: "", number: "", expiry: "", cvv: "" });
+    setCardForm({ holder: "", number: "", expiry: "", cvv: "", brand: "Visa" });
   };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!shipping) return setError("Informe um CEP válido para o frete.");
     setPlacing(true);
+    const remaining = Math.round((total - paySum) * 100) / 100;
     const result = await placeOrder({
       addressId: usingSaved ? address.id : undefined,
       address: usingSaved ? undefined : newAddr,
@@ -150,6 +177,9 @@ export function CheckoutPage() {
       couponCodes: couponSel,
       payments: selectedPays,
       items: cartItems,
+      newCard: pendingCard
+        ? { ...pendingCard, save: false, amount: remaining > 0 ? remaining : 0 }
+        : undefined,
     });
     if (typeof result !== "string") {
       setPlacing(false);
@@ -161,13 +191,13 @@ export function CheckoutPage() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="checkout-layout">
+    <form onSubmit={onSubmit} className="checkout-layout" data-testid="checkout-form">
       <div className="checkout-stack">
         <div>
           <p className="eyebrow">Checkout</p>
           <h1 className="page-title">Finalizar compra</h1>
           <p className="page-lead">
-            Escolha endereço, cupons e um ou mais cartões. A soma dos cartões deve cobrir o total.
+            Escolha endereço, cupons em reais e um ou mais cartões. A soma dos cartões cobre o total após os cupons.
           </p>
         </div>
 
@@ -182,6 +212,7 @@ export function CheckoutPage() {
                 key={a.id}
                 type="button"
                 className={`chip${addressId === a.id ? " is-active" : ""}`}
+                data-testid={`address-${a.label}`}
                 onClick={() => setAddressId(a.id)}
               >
                 {a.label}
@@ -190,6 +221,7 @@ export function CheckoutPage() {
             <button
               type="button"
               className={`chip${addressId === "new" ? " is-active" : ""}`}
+              data-testid="address-new"
               onClick={() => setAddressId("new")}
             >
               Novo endereço
@@ -207,6 +239,7 @@ export function CheckoutPage() {
                 <input
                   type="checkbox"
                   checked={saveAddr}
+                  data-testid="save-address"
                   onChange={(e) => setSaveAddr(e.target.checked)}
                 />
                 Salvar este endereço na conta
@@ -220,6 +253,11 @@ export function CheckoutPage() {
             <Truck size={18} className="icon-cyan" />
             Frete
           </h2>
+          {freightNote && (
+            <p className="muted" data-testid="freight-note">
+              {freightNote}
+            </p>
+          )}
           {options.length === 0 ? (
             <p className="muted">Informe um CEP válido com 8 dígitos.</p>
           ) : (
@@ -231,6 +269,7 @@ export function CheckoutPage() {
                       <input
                         type="radio"
                         name="shipping"
+                        data-testid={`shipping-${opt.id}`}
                         checked={shippingId === opt.id}
                         onChange={() => setShippingId(opt.id)}
                       />
@@ -254,7 +293,7 @@ export function CheckoutPage() {
             <Ticket size={18} className="icon-cyan" />
             Cupons de troca e promocionais
           </h2>
-          <p className="muted">Digite o código. O desconto é em porcentagem sobre o subtotal.</p>
+          <p className="muted">Digite o código. Cupons têm valor em reais. Apenas um cupom promocional por compra.</p>
           <div className="coupon-apply">
             <Field
               label="Código do cupom"
@@ -270,23 +309,38 @@ export function CheckoutPage() {
                 }
               }}
               required={false}
-              placeholder="PRINT10"
+              placeholder="TROCA20"
+              testId="coupon-code"
             />
-            <button type="button" className="btn-primary" onClick={applyCoupon}>
+            <button type="button" className="btn-primary" data-testid="apply-coupon" onClick={applyCoupon}>
               Aplicar
             </button>
           </div>
-          {couponMsg && <p className="form-error">{couponMsg}</p>}
+          {couponMsg && (
+            <p className="form-error" data-testid="coupon-msg">
+              {couponMsg}
+            </p>
+          )}
           {coupons.length > 0 && (
             <ul className="chip-row coupon-chips">
               {coupons.map((c) => (
                 <li key={c.id}>
-                  <button type="button" className="chip is-active" onClick={() => removeCoupon(c.code)}>
-                    {c.code} (−{formatPercent(c.value)}) ×
+                  <button
+                    type="button"
+                    className="chip is-active"
+                    data-testid={`coupon-chip-${c.code}`}
+                    onClick={() => removeCoupon(c.code)}
+                  >
+                    {c.code} (−{formatCouponValue(c.value)}) ×
                   </button>
                 </li>
               ))}
             </ul>
+          )}
+          {couponExcess > 0 && (
+            <p className="form-ok" data-testid="coupon-excess">
+              Os cupons superam a compra em {formatPrice(couponExcess)}. Um cupom de troca será gerado com essa diferença.
+            </p>
           )}
         </section>
 
@@ -303,7 +357,7 @@ export function CheckoutPage() {
           )}
           <ul className="option-list">
             {user.cards.map((c) => (
-              <li key={c.id} className="pay-split">
+              <li key={c.id} className="pay-split" data-testid={`pay-card-${c.last4}`}>
                 <span>
                   {c.brand} •••• {c.last4} · {c.holder}
                 </span>
@@ -313,6 +367,7 @@ export function CheckoutPage() {
                     className="field__control"
                     inputMode="numeric"
                     autoComplete="off"
+                    data-testid={`pay-amount-${c.last4}`}
                     value={cardSel[c.id] ?? ""}
                     onChange={(e) => setCardSel((p) => ({ ...p, [c.id]: maskMoney(e.target.value) }))}
                     onKeyDown={moneyKeyDown}
@@ -323,10 +378,10 @@ export function CheckoutPage() {
             ))}
           </ul>
           <div className="account-actions wrap">
-            <button type="button" className="btn-ghost" onClick={splitEven}>
+            <button type="button" className="btn-ghost" data-testid="split-even" onClick={splitEven}>
               Dividir igualmente
             </button>
-            <button type="button" className="btn-ghost" onClick={() => setAddingCard((v) => !v)}>
+            <button type="button" className="btn-ghost" data-testid="toggle-new-card" onClick={() => setAddingCard((v) => !v)}>
               Adicionar novo cartão
             </button>
           </div>
@@ -337,29 +392,55 @@ export function CheckoutPage() {
                 value={cardForm.holder}
                 onChange={(v) => setCardForm((f) => ({ ...f, holder: v }))}
                 wide
+                testId="card-holder"
               />
               <Field
                 label="Número"
                 value={cardForm.number}
                 onChange={(v) => setCardForm((f) => ({ ...f, number: maskCard(v) }))}
                 wide
+                testId="card-number"
+              />
+              <SelectField
+                label="Bandeira"
+                value={cardForm.brand}
+                onChange={(v) => setCardForm((f) => ({ ...f, brand: v }))}
+                options={[...CARD_BRANDS]}
+                testId="card-brand"
               />
               <Field
                 label="Validade"
                 value={cardForm.expiry}
-                onChange={(v) => setCardForm((f) => ({ ...f, expiry: v }))}
+                onChange={(v) => setCardForm((f) => ({ ...f, expiry: maskExpiry(v) }))}
+                placeholder="MM/AA"
+                testId="card-expiry"
               />
               <Field
                 label="CVV"
                 value={cardForm.cvv}
                 onChange={(v) => setCardForm((f) => ({ ...f, cvv: v.replace(/\D/g, "").slice(0, 4) }))}
+                testId="card-cvv"
               />
-              <button type="button" className="btn-primary" onClick={() => void onAddCard()}>
-                Salvar cartão
+              <label className="check-line">
+                <input
+                  type="checkbox"
+                  checked={saveCard}
+                  data-testid="save-card"
+                  onChange={(e) => setSaveCard(e.target.checked)}
+                />
+                Salvar este cartão na conta
+              </label>
+              <button type="button" className="btn-primary" data-testid="save-new-card" onClick={() => void onAddCard()}>
+                Incluir cartão
               </button>
             </div>
           )}
-          <p className={Math.abs(paySum - total) < 0.05 ? "form-ok" : "muted"}>
+          {pendingCard && (
+            <p className="form-ok" data-testid="pending-card">
+              Cartão •••• {pendingCard.number.replace(/\D/g, "").slice(-4)} será usado nesta compra (não salvo na conta).
+            </p>
+          )}
+          <p className={Math.abs(paySum - total) < 0.05 ? "form-ok" : "muted"} data-testid="pay-allocated">
             Alocado em cartões: {formatPrice(paySum)} / {formatPrice(total)}
           </p>
         </section>
@@ -391,16 +472,20 @@ export function CheckoutPage() {
             <span>{shippingPrice === 0 ? "Grátis" : formatPrice(shippingPrice)}</span>
           </div>
           <div className="summary__row">
-            <span>Cupons{discountPercent ? ` (−${formatPercent(discountPercent)})` : ""}</span>
+            <span>Cupons</span>
             <span>−{formatPrice(discount)}</span>
           </div>
         </div>
         <div className="summary__total">
           <span>Total</span>
-          <span>{formatPrice(total)}</span>
+          <span data-testid="checkout-total">{formatPrice(total)}</span>
         </div>
-        {error && <p className="form-error">{error}</p>}
-        <button type="submit" className="btn-primary btn-primary--block">
+        {error && (
+          <p className="form-error" data-testid="checkout-error">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="btn-primary btn-primary--block" data-testid="confirm-order">
           Confirmar pedido
         </button>
         <Link to="/carrinho" className="summary__back">

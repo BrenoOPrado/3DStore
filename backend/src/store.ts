@@ -14,10 +14,21 @@ const dataFile = join(dataDir, "store.json");
 let state: CommerceState = seedState();
 
 function hydrate(raw: CommerceState): CommerceState {
+  const seeded = seedState();
   const customers = (raw.customers ?? []).map((c) => migrateCustomer(c));
-  const catalog = raw.catalog?.length ? raw.catalog : seedState().catalog;
+  const catalog = (raw.catalog?.length ? raw.catalog : seeded.catalog).map((p) => ({
+    ...p,
+    stock: typeof p.stock === "number" ? p.stock : 20,
+  }));
   const orders = (raw.orders ?? []).map((o) => settlePaymentIfDue(o));
-  return { customers, orders, coupons: raw.coupons ?? [], catalog, sessionId: null };
+  return {
+    customers,
+    orders,
+    coupons: raw.coupons ?? seeded.coupons,
+    catalog,
+    logs: raw.logs ?? [],
+    sessionId: null,
+  };
 }
 
 export function loadStore() {

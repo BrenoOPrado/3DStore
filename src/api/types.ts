@@ -23,12 +23,22 @@ export type Snapshot = {
   myCoupons: Coupon[];
   myUsedCoupons: Coupon[];
   lastOrderId: string | null;
+  logs?: {
+    id: string;
+    at: string;
+    userEmail: string;
+    action: string;
+    entity: string;
+    payload: unknown;
+  }[];
 };
 
 export type QuoteResult = {
   subtotal: number;
   discount: number;
-  discountPercent: number;
+  couponSum: number;
+  couponExcess: number;
+  freightNote: string;
   options: { id: "pac" | "sedex" | "retirada"; name: string; days: string; price: number }[];
   shipping: { id: "pac" | "sedex" | "retirada"; name: string; days: string; price: number } | null;
   shippingPrice: number;

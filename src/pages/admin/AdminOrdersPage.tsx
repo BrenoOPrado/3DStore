@@ -5,7 +5,7 @@ import {
   STATUS_ACTION,
   STATUS_LABEL,
   formatAddress,
-  formatPercent,
+  formatCouponValue,
   type OrderStatus,
 } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
@@ -129,7 +129,7 @@ export function AdminOrderDetailPage() {
           <p>Pagamento</p>
           {order.coupons.map((c) => (
             <p key={c.code} className="muted">
-              {c.code} (−{formatPercent(c.value)})
+              {c.code} (−{formatCouponValue(c.value)})
             </p>
           ))}
           {order.payments.map((p) => (

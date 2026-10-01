@@ -15,12 +15,14 @@ export function ProductPage() {
   const [qty, setQty] = useState(1);
   const [color, setColor] = useState("");
   const [added, setAdded] = useState(false);
+  const [cartError, setCartError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!product) return;
     setColor(product.colors[0]);
     setQty(1);
     setAdded(false);
+    setCartError(null);
   }, [product]);
 
   if (!product) {
@@ -38,14 +40,21 @@ export function ProductPage() {
     .filter((p) => p.category === product.category && p.id !== product.id)
     .slice(0, 3);
   const category = categories.find((c) => c.id === product.category);
-  const canBuy = Boolean(user);
+  const stock = typeof product.stock === "number" ? product.stock : 20;
+  const canBuy = Boolean(user) && stock > 0;
 
   const addToCart = () => {
     if (!user) {
       navigate("/entrar", { state: { from: `/produto/${product.id}` } });
       return;
     }
-    if (!add(product.id, color || product.colors[0], qty)) return;
+    const err = add(product.id, color || product.colors[0], qty);
+    if (err) {
+      setCartError(err);
+      setAdded(false);
+      return;
+    }
+    setCartError(null);
     setAdded(true);
   };
 
@@ -80,6 +89,9 @@ export function ProductPage() {
             )}
           </div>
           <p className="product-info__desc">{product.description}</p>
+          <p className="muted" data-testid="product-stock">
+            Estoque: {stock} {stock === 1 ? "unidade" : "unidades"}
+          </p>
 
           <div className="product-info__colors">
             <p>Cor</p>
@@ -103,21 +115,39 @@ export function ProductPage() {
                 type="button"
                 onClick={() => setQty((n) => Math.max(1, n - 1))}
                 aria-label="Diminuir"
+                data-testid="qty-minus"
               >
                 <Minus size={16} />
               </button>
-              <span>{qty}</span>
-              <button type="button" onClick={() => setQty((n) => n + 1)} aria-label="Aumentar">
+              <span data-testid="qty-value">{qty}</span>
+              <button
+                type="button"
+                onClick={() => setQty((n) => Math.min(stock, n + 1))}
+                aria-label="Aumentar"
+                data-testid="qty-plus"
+                disabled={qty >= stock}
+              >
                 <Plus size={16} />
               </button>
             </div>
-            <button type="button" onClick={addToCart} className="btn-primary btn-primary--grow">
+            <button
+              type="button"
+              onClick={addToCart}
+              className="btn-primary btn-primary--grow"
+              data-testid="add-to-cart"
+              disabled={Boolean(user) && stock <= 0}
+            >
               <ShoppingCart size={16} />
-              {canBuy ? "Adicionar ao carrinho" : "Entrar para adicionar"}
+              {user ? (canBuy ? "Adicionar ao carrinho" : "Sem estoque") : "Entrar para adicionar"}
             </button>
           </div>
           {!user && (
             <p className="muted">Entre na sua conta para colocar itens no carrinho.</p>
+          )}
+          {cartError && (
+            <p className="form-error" data-testid="cart-error">
+              {cartError}
+            </p>
           )}
           {added && (
             <div className="added-banner">

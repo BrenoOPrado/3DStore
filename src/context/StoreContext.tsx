@@ -32,6 +32,15 @@ type PlaceOrderInput = {
   couponCodes: string[];
   payments: { cardId: string; amount: number }[];
   items: { productId: string; color: string; quantity: number }[];
+  newCard?: {
+    holder: string;
+    number: string;
+    expiry: string;
+    cvv: string;
+    brand?: string;
+    save?: boolean;
+    amount: number;
+  };
 };
 
 const emptySnapshot: Snapshot = {

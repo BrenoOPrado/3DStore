@@ -12,6 +12,7 @@ const blank = {
   material: "PLA",
   colors: "",
   image: "",
+  stock: "20",
   isNew: false,
   featured: false,
 };
@@ -53,6 +54,7 @@ export function AdminProductsPage() {
       material: p.material,
       colors: p.colors.join(", "),
       image: p.image,
+      stock: String(typeof p.stock === "number" ? p.stock : 20),
       isNew: Boolean(p.isNew),
       featured: Boolean(p.featured),
     });
@@ -78,6 +80,7 @@ export function AdminProductsPage() {
       material: form.material,
       colors,
       image: form.image.trim() || "/products/placeholder.jpg",
+      stock: Math.max(0, Math.round(Number(form.stock.replace(",", ".")) || 0)),
       isNew: form.isNew,
       featured: form.featured,
     };
@@ -146,7 +149,8 @@ export function AdminProductsPage() {
               <div>
                 <p className="coupon-code">{p.name}</p>
                 <p className="muted">
-                  {categories.find((c) => c.id === p.category)?.label} · {formatPrice(p.price)}
+                  {categories.find((c) => c.id === p.category)?.label} · {formatPrice(p.price)} · estoque{" "}
+                  {typeof p.stock === "number" ? p.stock : 20}
                 </p>
               </div>
               <div className="account-actions">
@@ -199,6 +203,12 @@ export function AdminProductsPage() {
               value={form.colors}
               onChange={(v) => setForm((f) => ({ ...f, colors: v }))}
               wide
+            />
+            <Field
+              label="Estoque"
+              value={form.stock}
+              onChange={(v) => setForm((f) => ({ ...f, stock: v.replace(/\D/g, "").slice(0, 5) }))}
+              inputMode="numeric"
             />
             <Field
               label="URL da imagem"

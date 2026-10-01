@@ -94,7 +94,7 @@ export function Header() {
         </div>
 
         <div className="site-header__actions">
-          <Link to="/carrinho" className="cart-btn" aria-label="Carrinho">
+          <Link to="/carrinho" className="cart-btn" aria-label="Carrinho" data-testid="nav-cart">
             <ShoppingCart size={20} />
             {count > 0 && <span className="cart-badge">{count}</span>}
           </Link>

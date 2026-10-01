@@ -5,7 +5,7 @@ import {
   STATUS_ACTION,
   STATUS_LABEL,
   formatAddress,
-  formatPercent,
+  formatCouponValue,
 } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
 
@@ -40,7 +40,9 @@ export function AccountOrderDetailPage() {
       </p>
       <div className="section__head">
         <h1 className="page-title">{order.id}</h1>
-        <span className={`status-pill status-${order.status}`}>{STATUS_LABEL[order.status]}</span>
+        <span className={`status-pill status-${order.status}`} data-testid="order-status-pill">
+          {STATUS_LABEL[order.status]}
+        </span>
       </div>
 
       <ul className="stack-list">
@@ -71,7 +73,7 @@ export function AccountOrderDetailPage() {
           <p>Pagamento</p>
           {order.coupons.map((c) => (
             <p key={c.code} className="muted">
-              Cupom {c.code} (−{formatPercent(c.value)})
+              Cupom {c.code} (−{formatCouponValue(c.value)})
             </p>
           ))}
           {order.payments.map((p) => (

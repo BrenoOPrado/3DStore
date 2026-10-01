@@ -17,6 +17,7 @@
     "concurrently": "^10.0.5",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "docx": "^9.8.1",
     "express": "^5.2.1",
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",

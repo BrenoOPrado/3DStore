@@ -18,14 +18,16 @@ export function AccountOrdersPage() {
         <ul className="stack-list">
           {myOrders.map((o) => (
             <li key={o.id}>
-              <Link to={`/conta/pedidos/${o.id}`} className="panel card-surface order-row">
+              <Link to={`/conta/pedidos/${o.id}`} className="panel card-surface order-row" data-testid={`order-${o.id}`}>
                 <div>
                   <p className="coupon-code">{o.id}</p>
                   <p className="muted">
                     {new Date(o.createdAt).toLocaleDateString("pt-BR")} · {o.items.length} item(ns)
                   </p>
                 </div>
-                <span className={`status-pill status-${o.status}`}>{STATUS_LABEL[o.status]}</span>
+                <span className={`status-pill status-${o.status}`} data-testid={`order-status-${o.id}`}>
+                  {STATUS_LABEL[o.status]}
+                </span>
                 <p className="order-row__total">{formatPrice(o.total)}</p>
               </Link>
             </li>

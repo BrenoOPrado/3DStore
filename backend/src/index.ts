@@ -20,6 +20,15 @@ server.use(
 );
 server.use(express.json({ limit: "1mb" }));
 server.use(cookieParser());
+server.use((req, res, next) => {
+  const start = Date.now();
+  const originalJson = res.json.bind(res);
+  res.json = ((body: unknown) => {
+    if (!res.headersSent) res.setHeader("X-Response-Time", `${Date.now() - start}ms`);
+    return originalJson(body);
+  }) as typeof res.json;
+  next();
+});
 
 function tokenOf(req: Request) {
   const raw = req.cookies?.[COOKIE];
@@ -225,6 +234,10 @@ server.post("/api/admin/coupons", (req, res) => {
 
 server.delete("/api/admin/coupons/:id", (req, res) => {
   sendResult(req, res, app.removeCoupon(customerIdOf(req), idParam(req)));
+});
+
+server.get("/api/admin/logs", (req, res) => {
+  sendResult(req, res, app.adminLogs(customerIdOf(req)));
 });
 
 server.get("/api/admin/chart", (req, res) => {

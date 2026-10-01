@@ -1,14 +1,12 @@
-import { calculateShipping } from "./data/checkout";
 import {
   addressLabelTaken,
   cardBrand,
   chartFromOrders,
-  couponDiscount,
-  couponPercentSum,
   productSlug,
   settlePaymentIfDue,
   uid,
   type Address,
+  type AuditLog,
   type Card,
   type Coupon,
   type CouponType,
@@ -19,6 +17,16 @@ import {
   type OrderStatus,
   type PaymentSplit,
 } from "./data/commerce";
+import {
+  couponDiscountAmount,
+  couponFaceSum,
+  freightOptions,
+  FREIGHT_CRITERION,
+  roundMoney,
+  validateCardPayments,
+  validateCartStock,
+  validateCouponSet,
+} from "./data/salesRules";
 import {
   composePhone,
   customerMatchesFilter,
@@ -35,6 +43,30 @@ import {
 import { categories, type Product } from "./data/products";
 import { publicCard, publicCustomer, publicOrder, snapshot } from "./dto";
 import { getState, resetStore, setState } from "./store";
+
+function writeLog(
+  actor: { id?: string; email?: string } | null,
+  action: string,
+  entity: string,
+  payload: unknown,
+  next: Partial<import("./data/commerce").CommerceState> = {}
+) {
+  const state = getState();
+  const entry: AuditLog = {
+    id: uid("log"),
+    at: new Date().toISOString(),
+    userId: actor?.id ?? null,
+    userEmail: actor?.email ?? "",
+    action,
+    entity,
+    payload,
+  };
+  setState({
+    ...state,
+    ...next,
+    logs: [entry, ...(state.logs ?? [])].slice(0, 400),
+  });
+}
 
 type Err = { error: string };
 
@@ -118,7 +150,13 @@ export function signup(data: {
     addresses: [{ ...data.address, id: uid("addr"), label: data.address.label.trim() }],
     cards: [],
   };
-  setState({ ...state, customers: [...state.customers, customer] });
+  writeLog(
+    customer,
+    "insert",
+    "cliente",
+    { id: customer.id, email: customer.email, name: customer.name },
+    { customers: [...state.customers, customer] }
+  );
   return { customerId: customer.id };
 }
 
@@ -148,21 +186,26 @@ export function updateProfile(
     return { error: "Já existe uma conta com este CPF." };
   }
   const phone = composePhone(merged.phoneType, merged.phoneDdd, merged.phoneNumber);
-  setState({
-    ...state,
-    customers: state.customers.map((c) =>
-      c.id === current.id
-        ? {
-            ...c,
-            ...data,
-            cpf,
-            phone,
-            phoneDdd: merged.phoneDdd.replace(/\D/g, ""),
-            phoneNumber: merged.phoneNumber.replace(/\D/g, ""),
-          }
-        : c
-    ),
-  });
+  writeLog(
+    current,
+    "update",
+    "cliente",
+    { id: current.id, name: merged.name, email: current.email, cpf, phone },
+    {
+      customers: state.customers.map((c) =>
+        c.id === current.id
+          ? {
+              ...c,
+              ...data,
+              cpf,
+              phone,
+              phoneDdd: merged.phoneDdd.replace(/\D/g, ""),
+              phoneNumber: merged.phoneNumber.replace(/\D/g, ""),
+            }
+          : c
+      ),
+    }
+  );
   return { ok: true };
 }
 
@@ -218,13 +261,17 @@ export function addAddress(customerId: string | null, address: Omit<Address, "id
     return { error: "Já existe um endereço com esse apelido." };
   }
   const next = { ...address, id: uid("addr"), label: address.label.trim() };
-  const state = getState();
-  setState({
-    ...state,
-    customers: state.customers.map((c) =>
-      c.id === current.id ? { ...c, addresses: [...c.addresses, next] } : c
-    ),
-  });
+  writeLog(
+    current,
+    "insert",
+    "endereco",
+    { customerId: current.id, address: next },
+    {
+      customers: getState().customers.map((c) =>
+        c.id === current.id ? { ...c, addresses: [...c.addresses, next] } : c
+      ),
+    }
+  );
   return { address: next };
 }
 
@@ -298,18 +345,22 @@ export function addCard(
     brand,
     preferred,
   };
-  const state = getState();
-  setState({
-    ...state,
-    customers: state.customers.map((c) =>
-      c.id === current.id
-        ? {
-            ...c,
-            cards: [...c.cards.map((item) => ({ ...item, preferred: preferred ? false : item.preferred })), next],
-          }
-        : c
-    ),
-  });
+  writeLog(
+    current,
+    "insert",
+    "cartao",
+    { customerId: current.id, last4: next.last4, brand: next.brand, holder: next.holder },
+    {
+      customers: getState().customers.map((c) =>
+        c.id === current.id
+          ? {
+              ...c,
+              cards: [...c.cards.map((item) => ({ ...item, preferred: preferred ? false : item.preferred })), next],
+            }
+          : c
+      ),
+    }
+  );
   return { card: publicCard(next) };
 }
 
@@ -363,8 +414,11 @@ export function addProduct(
     ...data,
     id: productSlug(data.name, state.catalog),
     name: data.name.trim(),
+    stock: typeof data.stock === "number" ? Math.max(0, Math.round(data.stock)) : 20,
   };
-  setState({ ...state, catalog: [...state.catalog, product] });
+  writeLog(admin, "insert", "produto", { id: product.id, name: product.name, stock: product.stock }, {
+    catalog: [...state.catalog, product],
+  });
   return { id: product.id };
 }
 
@@ -376,8 +430,7 @@ export function updateProduct(adminId: string | null, product: Product) {
   if (!product.name.trim()) return { error: "Informe o nome do produto." };
   if (!(product.price > 0)) return { error: "Informe um preço válido." };
   if (!product.colors.length) return { error: "Informe ao menos uma cor." };
-  setState({
-    ...state,
+  writeLog(admin, "update", "produto", { id: product.id, name: product.name.trim(), stock: product.stock }, {
     catalog: state.catalog.map((p) => (p.id === product.id ? { ...product, name: product.name.trim() } : p)),
   });
   return { ok: true };
@@ -411,9 +464,9 @@ export function addCoupon(
   if (state.coupons.some((c) => c.code.toUpperCase() === code)) {
     return { error: "Já existe um cupom com este código." };
   }
-  const value = Math.round(Number(data.value));
-  if (!Number.isFinite(value) || value < 1 || value > 100) {
-    return { error: "O desconto deve ser um percentual entre 1 e 100." };
+  const value = roundMoney(Number(data.value));
+  if (!Number.isFinite(value) || value < 0.01) {
+    return { error: "Informe o valor do cupom em reais." };
   }
   const type = data.type ?? "promocional";
   const ownerEmail = data.ownerEmail?.trim().toLowerCase() || undefined;
@@ -428,10 +481,12 @@ export function addCoupon(
     type,
     value,
     used: false,
-    description: data.description.trim() || `${value}% de desconto`,
+    description: data.description.trim() || `Cupom de R$ ${value.toFixed(2).replace(".", ",")}`,
     ownerEmail: type === "troca" ? ownerEmail : undefined,
   };
-  setState({ ...state, coupons: [coupon, ...state.coupons] });
+  writeLog(admin, "insert", "cupom", { id: coupon.id, code: coupon.code, value: coupon.value, type: coupon.type }, {
+    coupons: [coupon, ...state.coupons],
+  });
   return { id: coupon.id };
 }
 
@@ -449,13 +504,14 @@ type CartLine = { productId: string; color: string; quantity: number };
 function buildItems(lines: CartLine[]): OrderItem[] | Err {
   const catalog = getState().catalog;
   if (!lines.length) return { error: "Carrinho vazio." };
+  const stockErr = validateCartStock(lines, catalog);
+  if (stockErr) return { error: stockErr };
   const items: OrderItem[] = [];
   for (const line of lines) {
     const product = catalog.find((p) => p.id === line.productId);
     if (!product) return { error: "Produto indisponível." };
     if (!product.colors.includes(line.color)) return { error: "Cor indisponível para este produto." };
     const quantity = Math.max(1, Math.round(Number(line.quantity) || 0));
-    if (quantity < 1) return { error: "Quantidade inválida." };
     items.push({
       id: uid("oi"),
       productId: product.id,
@@ -463,7 +519,7 @@ function buildItems(lines: CartLine[]): OrderItem[] | Err {
       color: line.color,
       quantity,
       unitPrice: product.price,
-      line: product.price * quantity,
+      line: roundMoney(product.price * quantity),
       image: product.image,
       category: product.category,
     });
@@ -495,14 +551,29 @@ export function quoteCheckout(
   if (isErr(items)) return items;
   const couponRes = resolveCoupons(input.couponCodes ?? [], current.email);
   if (isErr(couponRes)) return couponRes;
-  const subtotal = items.reduce((s, i) => s + i.line, 0);
-  const discount = couponDiscount(subtotal, couponRes.coupons);
-  const discountPercent = couponPercentSum(couponRes.coupons);
-  const options = calculateShipping(input.cep);
+  const subtotal = roundMoney(items.reduce((s, i) => s + i.line, 0));
+  const options = freightOptions(input.cep, input.items);
   const shipping = options.find((o) => o.id === input.shippingId) ?? options[0] ?? null;
   const shippingPrice = shipping?.price ?? 0;
-  const total = Math.max(0, Math.round((subtotal + shippingPrice - discount) * 100) / 100);
-  return { items, subtotal, discount, discountPercent, options, shipping, shippingPrice, total };
+  const payable = roundMoney(subtotal + shippingPrice);
+  const couponErr = validateCouponSet(couponRes.coupons, payable);
+  if (couponErr) return { error: couponErr };
+  const couponSum = couponFaceSum(couponRes.coupons);
+  const discount = couponDiscountAmount(payable, couponRes.coupons);
+  const couponExcess = roundMoney(Math.max(0, couponSum - payable));
+  const total = roundMoney(Math.max(0, payable - discount));
+  return {
+    items,
+    subtotal,
+    discount,
+    couponSum,
+    couponExcess,
+    freightNote: FREIGHT_CRITERION,
+    options,
+    shipping,
+    shippingPrice,
+    total,
+  };
 }
 
 export function placeOrder(
@@ -515,6 +586,15 @@ export function placeOrder(
     couponCodes: string[];
     payments: { cardId: string; amount: number }[];
     items: CartLine[];
+    newCard?: {
+      holder: string;
+      number: string;
+      expiry: string;
+      cvv: string;
+      brand?: string;
+      save?: boolean;
+      amount: number;
+    };
   }
 ) {
   const current = currentUser(customerId);
@@ -524,67 +604,93 @@ export function placeOrder(
     items: input.items,
     couponCodes: input.couponCodes,
     shippingId: input.shippingId,
-    cep: (input.addressId
-      ? current.addresses.find((a) => a.id === input.addressId)?.cep
-      : input.address?.cep) ?? "",
+    cep:
+      (input.addressId
+        ? current.addresses.find((a) => a.id === input.addressId)?.cep
+        : input.address?.cep) ?? "",
   });
   if (isErr(quote) || !("total" in quote)) return isErr(quote) ? quote : { error: "Não foi possível calcular o pedido." };
   if (!quote.shipping) return { error: "Selecione o frete." };
 
-  const total = quote.total;
-  const paySum = Math.round(input.payments.reduce((s, p) => s + p.amount, 0) * 100) / 100;
-  if (total > 0 && input.payments.length === 0) {
-    return { error: "Selecione ao menos um cartão para o valor restante." };
-  }
-  if (Math.abs(paySum - total) > 0.05) {
-    return { error: "A soma dos cartões deve cobrir o total após os cupons." };
-  }
-  if (total > 0 && input.payments.some((p) => p.amount < 10 && total >= 10)) {
-    return { error: "Cada cartão deve receber no mínimo R$ 10,00." };
+  let state = getState();
+  let customers = state.customers;
+  let live = current;
+
+  if (input.newCard) {
+    const cardErr = validateCardInput(input.newCard);
+    if (cardErr) return { error: cardErr };
+    if (input.newCard.save !== false) {
+      const added = addCard(customerId, input.newCard);
+      if (isErr(added) || !("card" in added)) return isErr(added) ? added : { error: "Não foi possível salvar o cartão." };
+      const refreshed = currentUser(customerId);
+      if (isErr(refreshed)) return refreshed;
+      live = refreshed;
+      customers = getState().customers;
+      input.payments = [...(input.payments ?? []), { cardId: added.card.id, amount: input.newCard.amount }];
+    }
   }
 
-  const payments: PaymentSplit[] = input.payments.map((p) => {
-    const card = current.cards.find((c) => c.id === p.cardId);
-    return {
-      cardId: p.cardId,
-      last4: card?.last4 ?? "0000",
-      brand: card?.brand ?? "Cartão",
-      amount: p.amount,
-    };
+  const paymentsInput = [
+    ...(input.payments ?? []).filter((p) => p.amount > 0),
+    ...(input.newCard && input.newCard.save === false
+      ? [{ cardId: "new", amount: input.newCard.amount }]
+      : []),
+  ];
+  const payErr = validateCardPayments(paymentsInput, quote.total, (input.couponCodes ?? []).length > 0);
+  if (payErr) return { error: payErr };
+
+  const payments: PaymentSplit[] = paymentsInput.map((p) => {
+    const card = live.cards.find((c) => c.id === p.cardId);
+    if (card) {
+      return { cardId: card.id, last4: card.last4, brand: card.brand, amount: roundMoney(p.amount) };
+    }
+    if (input.newCard && input.newCard.save === false) {
+      const digits = input.newCard.number.replace(/\D/g, "");
+      return {
+        cardId: uid("card"),
+        last4: digits.slice(-4),
+        brand: input.newCard.brand?.trim() || cardBrand(digits),
+        amount: roundMoney(p.amount || input.newCard.amount),
+      };
+    }
+    return { cardId: p.cardId, last4: "0000", brand: "Cartão", amount: roundMoney(p.amount) };
   });
 
-  const state = getState();
   let address: Address | undefined;
-  let customers = state.customers;
   if (input.addressId) {
-    address = current.addresses.find((a) => a.id === input.addressId);
+    address = live.addresses.find((a) => a.id === input.addressId);
     if (!address) return { error: "Endereço não encontrado." };
   } else if (input.address) {
     const addrErr = validateAddress(input.address);
     if (addrErr) return { error: addrErr };
-    if (input.saveAddress && addressLabelTaken(current.addresses, input.address.label)) {
+    if (input.saveAddress && addressLabelTaken(live.addresses, input.address.label)) {
       return { error: "Já existe um endereço com esse apelido." };
     }
     address = { ...input.address, id: input.address.id || uid("addr"), label: input.address.label.trim() };
     if (input.saveAddress) {
       customers = customers.map((c) =>
-        c.id === current.id ? { ...c, addresses: [...c.addresses, address!] } : c
+        c.id === live.id ? { ...c, addresses: [...c.addresses, address!] } : c
       );
     }
   }
   if (!address) return { error: "Informe o endereço de entrega." };
 
-  const couponRes = resolveCoupons(input.couponCodes ?? [], current.email);
+  const couponRes = resolveCoupons(input.couponCodes ?? [], live.email);
   if (isErr(couponRes)) return couponRes;
+
+  const at = new Date().toISOString();
+  let coupons = getState().coupons;
+  const usedIds = new Set(couponRes.coupons.map((c) => c.id));
+  coupons = coupons.map((c) => (usedIds.has(c.id) ? { ...c, used: true } : c));
 
   const order: Order = {
     id: `3DS-${Date.now().toString().slice(-6)}`,
-    customerId: current.id,
-    customerEmail: current.email,
-    customerName: current.name,
-    createdAt: new Date().toISOString(),
-    status: "EM_ABERTO",
-    history: [{ status: "EM_ABERTO", at: new Date().toISOString(), by: "cliente" }],
+    customerId: live.id,
+    customerEmail: live.email,
+    customerName: live.name,
+    createdAt: at,
+    status: "EM_PROCESSAMENTO",
+    history: [{ status: "EM_PROCESSAMENTO", at, by: "cliente" }],
     items: quote.items,
     address,
     shipping: quote.shipping,
@@ -593,16 +699,40 @@ export function placeOrder(
     subtotal: quote.subtotal,
     shippingPrice: quote.shippingPrice,
     discount: quote.discount,
-    total,
+    total: quote.total,
   };
 
-  const usedIds = new Set(couponRes.coupons.map((c) => c.id));
-  setState({
-    ...state,
-    customers,
-    orders: [order, ...state.orders],
-    coupons: state.coupons.map((c) => (usedIds.has(c.id) ? { ...c, used: true } : c)),
-  });
+  if (quote.couponExcess > 0.009) {
+    const extra: Coupon = {
+      id: uid("c"),
+      code: `TROCA-${order.id.slice(-6)}`,
+      type: "troca",
+      value: quote.couponExcess,
+      ownerEmail: live.email.toLowerCase(),
+      used: false,
+      description: `R$ ${quote.couponExcess.toFixed(2).replace(".", ",")} de diferença da compra ${order.id}`,
+    };
+    coupons = [...coupons, extra];
+    order.exchangeCouponCode = extra.code;
+    order.exchangeCouponValue = extra.value;
+  }
+
+  writeLog(
+    live,
+    "insert",
+    "pedido",
+    {
+      id: order.id,
+      status: order.status,
+      total: order.total,
+      items: order.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+      coupons: order.coupons,
+      payments: order.payments,
+      address: { id: address.id, label: address.label, cep: address.cep },
+      exchangeCouponCode: order.exchangeCouponCode,
+    },
+    { customers, orders: [order, ...getState().orders], coupons }
+  );
   return { id: order.id, order: publicOrder(order) };
 }
 
@@ -773,6 +903,12 @@ export function adminCustomers(adminId: string | null, filter: CustomerFilter) {
       .filter((c) => customerMatchesFilter(c, filter))
       .map((c) => publicCustomer(c, state.orders)),
   };
+}
+
+export function adminLogs(adminId: string | null) {
+  const admin = requireAdmin(adminId);
+  if (isErr(admin)) return admin;
+  return { logs: getState().logs ?? [] };
 }
 
 export function resetDemo() {

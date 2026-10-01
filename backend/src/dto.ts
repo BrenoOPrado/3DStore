@@ -82,6 +82,7 @@ export type Snapshot = {
   myCoupons: Coupon[];
   myUsedCoupons: Coupon[];
   lastOrderId: string | null;
+  logs?: { id: string; at: string; userEmail: string; action: string; entity: string; payload: unknown }[];
 };
 
 export function snapshot(customerId: string | null, lastOrderId: string | null): Snapshot {
@@ -109,5 +110,6 @@ export function snapshot(customerId: string | null, lastOrderId: string | null):
         )
       : [],
     lastOrderId,
+    logs: isAdmin ? state.logs ?? [] : [],
   };
 }

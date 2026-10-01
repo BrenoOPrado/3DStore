@@ -19,6 +19,7 @@ export type Product = {
   description: string;
   material: string;
   colors: string[];
+  stock?: number;
   isNew?: boolean;
   featured?: boolean;
   /** How the photo fills the square thumbnail */

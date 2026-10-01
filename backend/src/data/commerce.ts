@@ -90,7 +90,7 @@ export type Coupon = {
   id: string;
   code: string;
   type: CouponType;
-  /** Percentual de desconto (0–100). */
+  /** Valor em reais (R$). */
   value: number;
   ownerEmail?: string;
   used: boolean;
@@ -141,6 +141,8 @@ export type Order = {
   total: number;
   exchangeItemId?: string;
   exchangeQty?: number;
+  exchangeCouponCode?: string;
+  exchangeCouponValue?: number;
 };
 
 export const STATUS_ACTION: Partial<Record<OrderStatus, string>> = {
@@ -158,11 +160,22 @@ export const STATUS_ACTION: Partial<Record<OrderStatus, string>> = {
 export const STORE_KEY = "3dstore-commerce-v2";
 export const SESSION_KEY = "3dstore-session-id";
 
+export type AuditLog = {
+  id: string;
+  at: string;
+  userId: string | null;
+  userEmail: string;
+  action: string;
+  entity: string;
+  payload: unknown;
+};
+
 export type CommerceState = {
   customers: Customer[];
   orders: Order[];
   coupons: Coupon[];
   catalog: Product[];
+  logs: AuditLog[];
   sessionId: string | null;
 };
 
@@ -204,12 +217,12 @@ export function formatPercent(n: number) {
 }
 
 export function couponPercentSum(coupons: { value: number }[]) {
-  return Math.min(100, coupons.reduce((s, c) => s + Math.max(0, Number(c.value) || 0), 0));
+  return Math.round(coupons.reduce((s, c) => s + Math.max(0, Number(c.value) || 0), 0) * 100) / 100;
 }
 
-export function couponDiscount(subtotal: number, coupons: { value: number }[]) {
-  const p = couponPercentSum(coupons);
-  return Math.round(((subtotal * p) / 100) * 100) / 100;
+export function couponDiscount(payable: number, coupons: { value: number }[]) {
+  const sum = couponPercentSum(coupons);
+  return Math.min(Math.round((Number(payable) || 0) * 100) / 100, sum);
 }
 
 export function migrateAddress(a: Partial<Address> & Pick<Address, "id" | "label">): Address {
@@ -239,8 +252,18 @@ export function addressLabelTaken(addresses: Address[], label: string, exceptId?
   return addresses.some((a) => a.id !== exceptId && a.label.trim().toLowerCase() === n);
 }
 
+const STOCK_BY_ID: Record<string, number> = {
+  "gancho-trex": 8,
+  "porta-alho": 8,
+  "escorredor-elefante": 1,
+};
+
 export function cloneCatalog(): Product[] {
-  return seedCatalog.map((p) => ({ ...p, colors: [...p.colors] }));
+  return seedCatalog.map((p) => ({
+    ...p,
+    colors: [...p.colors],
+    stock: p.stock ?? STOCK_BY_ID[p.id] ?? 20,
+  }));
 }
 
 export function productSlug(name: string, existing: Product[], keepId?: string) {
@@ -558,7 +581,7 @@ export function seedState(): CommerceState {
       type: "promocional",
       value: 20,
       used: false,
-      description: "20% off na primeira compra",
+      description: "R$ 20,00 de desconto promocional",
     },
     {
       id: "c-print",
@@ -566,7 +589,15 @@ export function seedState(): CommerceState {
       type: "promocional",
       value: 10,
       used: false,
-      description: "10% off em qualquer pedido",
+      description: "R$ 10,00 de desconto promocional",
+    },
+    {
+      id: "c-promo30",
+      code: "PROMO30",
+      type: "promocional",
+      value: 30,
+      used: false,
+      description: "R$ 30,00 de desconto promocional",
     },
     {
       id: "c-atelier",
@@ -574,7 +605,7 @@ export function seedState(): CommerceState {
       type: "promocional",
       value: 15,
       used: false,
-      description: "15% off em peças do ateliê",
+      description: "R$ 15,00 de desconto promocional",
     },
     {
       id: "c-ana-troca",
@@ -583,7 +614,34 @@ export function seedState(): CommerceState {
       value: 15,
       ownerEmail: "ana.souza@email.com",
       used: false,
-      description: "15% de desconto pela troca do suporte de headset",
+      description: "R$ 15,00 de cupom de troca",
+    },
+    {
+      id: "c-ana-20",
+      code: "TROCA20",
+      type: "troca",
+      value: 20,
+      ownerEmail: "ana.souza@email.com",
+      used: false,
+      description: "R$ 20,00 de cupom de troca",
+    },
+    {
+      id: "c-ana-40",
+      code: "TROCA40",
+      type: "troca",
+      value: 40,
+      ownerEmail: "ana.souza@email.com",
+      used: false,
+      description: "R$ 40,00 de cupom de troca",
+    },
+    {
+      id: "c-ana-35",
+      code: "TROCA35",
+      type: "troca",
+      value: 35,
+      ownerEmail: "ana.souza@email.com",
+      used: false,
+      description: "R$ 35,00 de cupom de troca",
     },
   ];
 
@@ -803,7 +861,7 @@ export function seedState(): CommerceState {
     }),
   ];
 
-  return { customers, orders, coupons, catalog: cloneCatalog(), sessionId: null };
+  return { customers, orders, coupons, catalog: cloneCatalog(), logs: [], sessionId: null };
 }
 
 export function loadState(): CommerceState {

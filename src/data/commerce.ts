@@ -155,6 +155,8 @@ export type Order = {
   total: number;
   exchangeItemId?: string;
   exchangeQty?: number;
+  exchangeCouponCode?: string;
+  exchangeCouponValue?: number;
   actions: OrderActions;
 };
 
@@ -201,6 +203,10 @@ export function addressDefaults(partial: Partial<Address> & Pick<Address, "id" |
 
 export function formatPercent(n: number) {
   return `${n}%`;
+}
+
+export function formatCouponValue(n: number) {
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export type ChartPoint = { label: string; total: number; count: number };
