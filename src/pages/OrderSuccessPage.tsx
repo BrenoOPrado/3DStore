@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, Package } from "lucide-react";
 import { formatPrice } from "../data/products";
 import { useStore } from "../context/StoreContext";
-import { formatAddress } from "../data/commerce";
+import { STATUS_LABEL, formatAddress } from "../data/commerce";
 
 export function OrderSuccessPage() {
   const { lastOrderId, myOrders, user } = useStore();
@@ -31,13 +31,18 @@ export function OrderSuccessPage() {
     <div className="success">
       <div className="success__hero">
         <CheckCircle2 className="icon-cyan" size={56} strokeWidth={1.5} />
-        <p className="success__kicker" data-testid="order-id">Pedido {order.id}</p>
+        <p className="success__kicker" data-testid="order-id">
+          Pedido {order.id}
+        </p>
         <h1 data-testid="order-status-title">Pedido em processamento</h1>
         <p className="success__lead">
           {order.customerName}, o pedido foi registrado com status EM PROCESSAMENTO.
         </p>
         <p className="muted" data-testid="order-status">
-          Status: Em processamento
+          Status inicial: Em processamento
+        </p>
+        <p className="muted" data-testid="order-current-status">
+          Status atual: {STATUS_LABEL[order.status]}
         </p>
       </div>
 
@@ -67,9 +72,7 @@ export function OrderSuccessPage() {
           </p>
           <p>
             <span>Frete ({order.shipping.name})</span>
-            <span>
-              {order.shippingPrice === 0 ? "Grátis" : formatPrice(order.shippingPrice)}
-            </span>
+            <span>{order.shippingPrice === 0 ? "Grátis" : formatPrice(order.shippingPrice)}</span>
           </p>
           <p>
             <span>Cupons</span>
@@ -81,7 +84,8 @@ export function OrderSuccessPage() {
           </p>
           {order.exchangeCouponCode && (
             <p className="form-ok" data-testid="generated-coupon">
-              Cupom de troca {order.exchangeCouponCode} de {formatPrice(order.exchangeCouponValue ?? 0)} gerado pela diferença.
+              Cupom de troca {order.exchangeCouponCode} de {formatPrice(order.exchangeCouponValue ?? 0)} gerado pela
+              diferença.
             </p>
           )}
         </div>

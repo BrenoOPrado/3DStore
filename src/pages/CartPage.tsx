@@ -5,10 +5,25 @@ import { useCart } from "../context/CartContext";
 import { useStore } from "../context/StoreContext";
 
 export function CartPage() {
-  const { detailed, setQty, remove, subtotal, clear, count, error } = useCart();
+  const {
+    detailed,
+    setQty,
+    remove,
+    subtotal,
+    clear,
+    count,
+    error,
+    expiredDetailed,
+    buyDisabled,
+    expiresAt,
+    warnAt,
+    dismissExpired,
+  } = useCart();
   const { user } = useStore();
+  const lockSoon =
+    Boolean(expiresAt && warnAt && new Date(warnAt).getTime() <= Date.now() && new Date(expiresAt).getTime() > Date.now());
 
-  if (count === 0) {
+  if (count === 0 && expiredDetailed.length === 0) {
     return (
       <div className="page page--narrow page--center empty-state">
         <h1>Seu carrinho está vazio</h1>
@@ -25,10 +40,17 @@ export function CartPage() {
       <div>
         <div className="cart-head">
           <h1>Carrinho</h1>
-          <button type="button" onClick={clear} className="ghost-link">
-            Limpar
-          </button>
+          {count > 0 && (
+            <button type="button" onClick={() => void clear()} className="ghost-link">
+              Limpar
+            </button>
+          )}
         </div>
+        {lockSoon && (
+          <p className="form-error" data-testid="lock-warning">
+            O bloqueio dos itens expira em breve. Finalize a compra ou os produtos voltam ao estoque.
+          </p>
+        )}
         <ul className="cart-list" data-testid="cart-list">
           {detailed.map((item) => (
             <li
@@ -53,7 +75,7 @@ export function CartPage() {
                     <button
                       type="button"
                       data-testid={`qty-minus-${item.product.id}`}
-                      onClick={() => setQty(item.product.id, item.color, item.quantity - 1)}
+                      onClick={() => void setQty(item.product.id, item.color, item.quantity - 1)}
                     >
                       <Minus size={14} />
                     </button>
@@ -62,14 +84,14 @@ export function CartPage() {
                       type="button"
                       data-testid={`qty-plus-${item.product.id}`}
                       disabled={item.quantity >= item.stock}
-                      onClick={() => setQty(item.product.id, item.color, item.quantity + 1)}
+                      onClick={() => void setQty(item.product.id, item.color, item.quantity + 1)}
                     >
                       <Plus size={14} />
                     </button>
                   </div>
                   <button
                     type="button"
-                    onClick={() => remove(item.product.id, item.color)}
+                    onClick={() => void remove(item.product.id, item.color)}
                     className="icon-muted"
                     aria-label="Remover"
                     data-testid={`remove-${item.product.id}`}
@@ -81,6 +103,28 @@ export function CartPage() {
             </li>
           ))}
         </ul>
+        {expiredDetailed.length > 0 && (
+          <section className="panel card-surface" data-testid="cart-expired">
+            <h2 className="panel__title">Itens removidos por expiração do bloqueio</h2>
+            <p className="muted">A compra fica desabilitada até você reconhecer estes itens.</p>
+            <ul className="cart-list">
+              {expiredDetailed.map((item) => (
+                <li key={`exp-${item.product.id}-${item.color}`} className="cart-item">
+                  <img src={item.product.image} alt="" className="cart-item__img" />
+                  <div className="cart-item__body">
+                    <p className="cart-item__name">{item.product.name}</p>
+                    <p className="muted">
+                      {item.color} · {item.quantity}x
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <button type="button" className="btn-ghost" data-testid="dismiss-expired" onClick={() => void dismissExpired()}>
+              Reconhecer e liberar compra
+            </button>
+          </section>
+        )}
         {error && (
           <p className="form-error" data-testid="cart-error">
             {error}
@@ -101,14 +145,20 @@ export function CartPage() {
           <span>Total</span>
           <span>{formatPrice(subtotal)}</span>
         </div>
-        <Link
-          to={user ? "/checkout" : "/entrar"}
-          state={user ? undefined : { from: "/checkout" }}
-          className="btn-primary btn-primary--block"
-          data-testid="go-checkout"
-        >
-          {user ? "Finalizar compra" : "Entrar para finalizar"}
-        </Link>
+        {buyDisabled || count === 0 ? (
+          <button type="button" className="btn-primary btn-primary--block" data-testid="go-checkout" disabled>
+            Compra desabilitada
+          </button>
+        ) : (
+          <Link
+            to={user ? "/checkout" : "/entrar"}
+            state={user ? undefined : { from: "/checkout" }}
+            className="btn-primary btn-primary--block"
+            data-testid="go-checkout"
+          >
+            {user ? "Finalizar compra" : "Entrar para finalizar"}
+          </Link>
+        )}
         <Link to="/catalogo" className="summary__back">
           Continuar comprando
         </Link>

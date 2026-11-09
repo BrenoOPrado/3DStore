@@ -3,10 +3,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   migrateCustomer,
+  migrateOrderStatus,
   seedState,
-  settlePaymentIfDue,
   type CommerceState,
 } from "./data/commerce";
+import { DEFAULT_LOCK_MS } from "./data/orderFlow";
 
 const dataDir = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
 const dataFile = join(dataDir, "store.json");
@@ -16,11 +17,19 @@ let state: CommerceState = seedState();
 function hydrate(raw: CommerceState): CommerceState {
   const seeded = seedState();
   const customers = (raw.customers ?? []).map((c) => migrateCustomer(c));
-  const catalog = (raw.catalog?.length ? raw.catalog : seeded.catalog).map((p) => ({
+  const existing = raw.catalog?.length ? raw.catalog : [];
+  const have = new Set(existing.map((p) => p.id));
+  const extras = existing.length ? seeded.catalog.filter((p) => !have.has(p.id)) : [];
+  const catalog = [...(existing.length ? existing : seeded.catalog), ...extras].map((p) => ({
     ...p,
     stock: typeof p.stock === "number" ? p.stock : 20,
+    status: p.status === "inativo" ? "inativo" : "ativo",
   }));
-  const orders = (raw.orders ?? []).map((o) => settlePaymentIfDue(o));
+  const orders = (raw.orders ?? []).map((o) => ({
+    ...o,
+    status: migrateOrderStatus(o.status),
+    history: (o.history ?? []).map((h) => ({ ...h, status: migrateOrderStatus(h.status) })),
+  }));
   return {
     customers,
     orders,
@@ -28,6 +37,11 @@ function hydrate(raw: CommerceState): CommerceState {
     catalog,
     logs: raw.logs ?? [],
     sessionId: null,
+    locks: raw.locks ?? [],
+    expiredCart: raw.expiredCart ?? [],
+    notifications: raw.notifications ?? [],
+    clockOffsetMs: raw.clockOffsetMs ?? 0,
+    lockTtlMs: raw.lockTtlMs ?? DEFAULT_LOCK_MS,
   };
 }
 
@@ -46,8 +60,6 @@ export function loadStore() {
       return state;
     }
     state = hydrate(parsed);
-    const changed = state.orders.some((o, i) => o.status !== parsed.orders[i]?.status);
-    if (changed) persist();
   } catch {
     state = seedState();
     persist();

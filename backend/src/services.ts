@@ -1,9 +1,7 @@
 import {
   addressLabelTaken,
   cardBrand,
-  chartFromOrders,
   productSlug,
-  settlePaymentIfDue,
   uid,
   type Address,
   type AuditLog,
@@ -18,13 +16,26 @@ import {
   type PaymentSplit,
 } from "./data/commerce";
 import {
+  couponStillValid,
+  displayAvailable,
+  exchangeValue,
+  isActiveLock,
+  operatorAccepts,
+  physicalStock,
+  restockExchange,
+  revalidateLines,
+  salesByCategoryMonth,
+  validateChartPeriod,
+  WARN_BEFORE_MS,
+  type CartLock,
+} from "./data/orderFlow";
+import {
   couponDiscountAmount,
   couponFaceSum,
   freightOptions,
   FREIGHT_CRITERION,
   roundMoney,
   validateCardPayments,
-  validateCartStock,
   validateCouponSet,
 } from "./data/salesRules";
 import {
@@ -40,7 +51,8 @@ import {
   validateSignupPasswords,
   type CustomerFilter,
 } from "./data/customerRules";
-import { categories, type Product } from "./data/products";
+import { categories, isListedProduct, type Product } from "./data/products";
+import { exceedsPriceConfirmThreshold, priceChangePercent, validateProduct } from "./data/productRules";
 import { publicCard, publicCustomer, publicOrder, snapshot } from "./dto";
 import { getState, resetStore, setState } from "./store";
 
@@ -398,41 +410,86 @@ export function setPreferredCard(customerId: string | null, id: string) {
   return { ok: true };
 }
 
+function normalizeProductInput(data: Partial<Product> & { name: string; price: number; category: Product["category"] }) {
+  const colors = (data.colors ?? []).map((c) => c.trim()).filter(Boolean);
+  const stock = Math.max(0, Math.round(Number(data.stock) || 0));
+  const original = data.originalPrice && data.originalPrice > 0 ? data.originalPrice : undefined;
+  return {
+    name: data.name.trim(),
+    price: roundMoney(Number(data.price)),
+    originalPrice: original,
+    category: data.category,
+    description: (data.description ?? "").trim(),
+    material: (data.material ?? "").trim(),
+    colors,
+    image: (data.image ?? "").trim() || "/products/placeholder.jpg",
+    stock,
+    isNew: Boolean(data.isNew),
+    featured: Boolean(data.featured),
+    imageFit: data.imageFit,
+    imagePosition: data.imagePosition,
+  };
+}
+
 export function addProduct(
   adminId: string | null,
   data: Omit<Product, "id" | "rating" | "reviews"> & Partial<Pick<Product, "rating" | "reviews">>
 ) {
   const admin = requireAdmin(adminId);
   if (isErr(admin)) return admin;
-  if (!data.name.trim()) return { error: "Informe o nome do produto." };
-  if (!(data.price > 0)) return { error: "Informe um preço válido." };
-  if (!data.colors.length) return { error: "Informe ao menos uma cor." };
+  const parsed = normalizeProductInput(data);
+  const invalid = validateProduct(parsed);
+  if (invalid) return { error: invalid };
   const state = getState();
   const product: Product = {
     rating: 5,
     reviews: 0,
-    ...data,
-    id: productSlug(data.name, state.catalog),
-    name: data.name.trim(),
-    stock: typeof data.stock === "number" ? Math.max(0, Math.round(data.stock)) : 20,
+    ...parsed,
+    id: productSlug(parsed.name, state.catalog),
+    status: "ativo",
   };
-  writeLog(admin, "insert", "produto", { id: product.id, name: product.name, stock: product.stock }, {
+  writeLog(admin, "insert", "produto", { id: product.id, name: product.name, stock: product.stock, price: product.price }, {
     catalog: [...state.catalog, product],
   });
   return { id: product.id };
 }
 
-export function updateProduct(adminId: string | null, product: Product) {
+export function updateProduct(
+  adminId: string | null,
+  product: Product,
+  extras: { priceConfirmations?: number } = {}
+) {
   const admin = requireAdmin(adminId);
   if (isErr(admin)) return admin;
   const state = getState();
-  if (!state.catalog.some((p) => p.id === product.id)) return { error: "Produto não encontrado." };
-  if (!product.name.trim()) return { error: "Informe o nome do produto." };
-  if (!(product.price > 0)) return { error: "Informe um preço válido." };
-  if (!product.colors.length) return { error: "Informe ao menos uma cor." };
-  writeLog(admin, "update", "produto", { id: product.id, name: product.name.trim(), stock: product.stock }, {
-    catalog: state.catalog.map((p) => (p.id === product.id ? { ...product, name: product.name.trim() } : p)),
-  });
+  const existing = state.catalog.find((p) => p.id === product.id);
+  if (!existing) return { error: "Produto não encontrado." };
+  const parsed = normalizeProductInput({ ...existing, ...product, category: product.category ?? existing.category });
+  const invalid = validateProduct(parsed);
+  if (invalid) return { error: invalid };
+  if (exceedsPriceConfirmThreshold(existing.price, parsed.price)) {
+    const confirms = Math.max(0, Math.round(Number(extras.priceConfirmations) || 0));
+    if (confirms < 2) {
+      return {
+        error: `Alteração de preço acima de 10% (${priceChangePercent(existing.price, parsed.price)}%) exige duas confirmações.`,
+      };
+    }
+  }
+  const next: Product = {
+    ...existing,
+    ...parsed,
+    id: existing.id,
+    rating: existing.rating,
+    reviews: existing.reviews,
+    status: existing.status ?? "ativo",
+  };
+  writeLog(
+    admin,
+    "update",
+    "produto",
+    { id: next.id, name: next.name, stock: next.stock, price: next.price, previousPrice: existing.price },
+    { catalog: state.catalog.map((p) => (p.id === next.id ? next : p)) }
+  );
   return { ok: true };
 }
 
@@ -440,8 +497,32 @@ export function deleteProduct(adminId: string | null, id: string) {
   const admin = requireAdmin(adminId);
   if (isErr(admin)) return admin;
   const state = getState();
-  if (!state.catalog.some((p) => p.id === id)) return { error: "Produto não encontrado." };
-  setState({ ...state, catalog: state.catalog.filter((p) => p.id !== id) });
+  const product = state.catalog.find((p) => p.id === id);
+  if (!product) return { error: "Produto não encontrado." };
+  if ((product.status ?? "ativo") === "inativo") return { error: "Produto já está excluído do catálogo." };
+  writeLog(
+    admin,
+    "delete",
+    "produto",
+    { id: product.id, name: product.name, keepHistory: true },
+    {
+      catalog: state.catalog.map((p) => (p.id === id ? { ...p, status: "inativo" as const } : p)),
+      locks: (state.locks ?? []).filter((lock) => lock.productId !== id),
+    }
+  );
+  return { ok: true };
+}
+
+export function restoreProduct(adminId: string | null, id: string) {
+  const admin = requireAdmin(adminId);
+  if (isErr(admin)) return admin;
+  const state = getState();
+  const product = state.catalog.find((p) => p.id === id);
+  if (!product) return { error: "Produto não encontrado." };
+  if ((product.status ?? "ativo") === "ativo") return { error: "Produto já está ativo no catálogo." };
+  writeLog(admin, "update", "produto", { id: product.id, name: product.name, status: "ativo" }, {
+    catalog: state.catalog.map((p) => (p.id === id ? { ...p, status: "ativo" as const } : p)),
+  });
   return { ok: true };
 }
 
@@ -501,15 +582,241 @@ export function removeCoupon(adminId: string | null, id: string) {
 
 type CartLine = { productId: string; color: string; quantity: number };
 
-function buildItems(lines: CartLine[]): OrderItem[] | Err {
-  const catalog = getState().catalog;
+function nowMs() {
+  return Date.now() + (getState().clockOffsetMs ?? 0);
+}
+
+export function touchCart() {
+  sweepExpired();
+}
+
+function sweepExpired() {
+  const state = getState();
+  const now = nowMs();
+  const kept: CartLock[] = [];
+  const expired = [...(state.expiredCart ?? [])];
+  let changed = false;
+  for (const lock of state.locks ?? []) {
+    if (isActiveLock(lock, now)) {
+      kept.push(lock);
+      continue;
+    }
+    changed = true;
+    expired.push({
+      productId: lock.productId,
+      color: lock.color,
+      quantity: lock.quantity,
+      customerId: lock.customerId,
+      expiredAt: lock.expiresAt,
+    });
+  }
+  if (!changed) return state;
+  const next = { ...state, locks: kept, expiredCart: expired };
+  setState(next);
+  return next;
+}
+
+function refreshCustomerExpiry(locks: CartLock[], customerId: string, now: number, ttl: number) {
+  const expiresAt = new Date(now + ttl).toISOString();
+  return locks.map((lock) =>
+    lock.customerId === customerId && isActiveLock(lock, now) ? { ...lock, expiresAt } : lock
+  );
+}
+
+function cartLinesOf(customerId: string): CartLine[] {
+  const state = sweepExpired();
+  const now = nowMs();
+  return (state.locks ?? [])
+    .filter((lock) => lock.customerId === customerId && isActiveLock(lock, now))
+    .map((lock) => ({ productId: lock.productId, color: lock.color, quantity: lock.quantity }));
+}
+
+export function getCart(customerId: string | null) {
+  const current = currentUser(customerId);
+  if (isErr(current)) {
+    return {
+      items: [] as CartLine[],
+      expired: [] as CartLine[],
+      buyDisabled: false,
+      expiresAt: null as string | null,
+      warnAt: null as string | null,
+    };
+  }
+  const state = sweepExpired();
+  const now = nowMs();
+  const items = (state.locks ?? [])
+    .filter((lock) => lock.customerId === current.id && isActiveLock(lock, now))
+    .map((lock) => ({ productId: lock.productId, color: lock.color, quantity: lock.quantity }));
+  const expired = (state.expiredCart ?? [])
+    .filter((item) => item.customerId === current.id)
+    .map((item) => ({ productId: item.productId, color: item.color, quantity: item.quantity }));
+  const soonest = (state.locks ?? [])
+    .filter((lock) => lock.customerId === current.id && isActiveLock(lock, now))
+    .map((lock) => lock.expiresAt)
+    .sort()[0];
+  return {
+    items,
+    expired,
+    buyDisabled: expired.length > 0,
+    expiresAt: soonest ?? null,
+    warnAt: soonest ? new Date(new Date(soonest).getTime() - WARN_BEFORE_MS).toISOString() : null,
+  };
+}
+
+export function addToCart(
+  customerId: string | null,
+  input: { productId: string; color: string; quantity?: number }
+) {
+  const current = currentUser(customerId);
+  if (isErr(current)) return current;
+  const qty = Math.max(1, Math.round(Number(input.quantity) || 1));
+  const state = sweepExpired();
+  const now = nowMs();
+  const product = state.catalog.find((p) => p.id === input.productId);
+  if (!product || !isListedProduct(product)) return { error: "Produto indisponível." };
+  if (!product.colors.includes(input.color)) return { error: "Cor indisponível para este produto." };
+  const available = displayAvailable(product, state.locks ?? [], now, current.id);
+  const own = (state.locks ?? [])
+    .filter((lock) => lock.customerId === current.id && lock.productId === product.id && isActiveLock(lock, now))
+    .reduce((sum, lock) => sum + lock.quantity, 0);
+  if (available <= 0) return { error: `${product.name} está indisponível em estoque.` };
+  if (own + qty > available) {
+    return { error: `Quantidade de ${product.name} acima do estoque (${available}).` };
+  }
+  const ttl = state.lockTtlMs || 15 * 60 * 1000;
+  const expiresAt = new Date(now + ttl).toISOString();
+  let locks = [...(state.locks ?? [])];
+  const idx = locks.findIndex(
+    (lock) =>
+      lock.customerId === current.id &&
+      lock.productId === input.productId &&
+      lock.color === input.color &&
+      isActiveLock(lock, now)
+  );
+  if (idx >= 0) {
+    locks[idx] = { ...locks[idx], quantity: locks[idx].quantity + qty, expiresAt };
+  } else {
+    locks.push({
+      id: uid("lock"),
+      customerId: current.id,
+      productId: input.productId,
+      color: input.color,
+      quantity: qty,
+      lockedAt: new Date(now).toISOString(),
+      expiresAt,
+    });
+  }
+  locks = refreshCustomerExpiry(locks, current.id, now, ttl);
+  writeLog(current, "update", "carrinho", { productId: input.productId, quantity: qty }, { locks });
+  return { ok: true, ...getCart(current.id) };
+}
+
+export function setCartQty(
+  customerId: string | null,
+  input: { productId: string; color: string; quantity: number }
+) {
+  const current = currentUser(customerId);
+  if (isErr(current)) return current;
+  const quantity = Math.round(Number(input.quantity) || 0);
+  const state = sweepExpired();
+  const now = nowMs();
+  let locks = [...(state.locks ?? [])];
+  if (quantity <= 0) {
+    locks = locks.filter(
+      (lock) =>
+        !(lock.customerId === current.id && lock.productId === input.productId && lock.color === input.color)
+    );
+    writeLog(current, "delete", "carrinho", { productId: input.productId }, { locks });
+    return { ok: true, ...getCart(current.id) };
+  }
+  const product = state.catalog.find((p) => p.id === input.productId);
+  if (!product || !isListedProduct(product)) return { error: "Produto indisponível." };
+  const available = displayAvailable(product, state.locks ?? [], now, current.id);
+  const othersOwn = locks
+    .filter(
+      (lock) =>
+        lock.customerId === current.id &&
+        lock.productId === input.productId &&
+        lock.color !== input.color &&
+        isActiveLock(lock, now)
+    )
+    .reduce((sum, lock) => sum + lock.quantity, 0);
+  if (othersOwn + quantity > available) {
+    return { error: `Quantidade de ${product.name} acima do estoque (${available}).` };
+  }
+  const ttl = state.lockTtlMs || 15 * 60 * 1000;
+  const idx = locks.findIndex(
+    (lock) =>
+      lock.customerId === current.id && lock.productId === input.productId && lock.color === input.color
+  );
+  if (idx < 0) return { error: "Item não está no carrinho." };
+  locks[idx] = { ...locks[idx], quantity };
+  locks = refreshCustomerExpiry(locks, current.id, now, ttl);
+  writeLog(current, "update", "carrinho", { productId: input.productId, quantity }, { locks });
+  return { ok: true, ...getCart(current.id) };
+}
+
+export function removeCartItem(customerId: string | null, productId: string, color: string) {
+  return setCartQty(customerId, { productId, color, quantity: 0 });
+}
+
+export function clearCart(customerId: string | null) {
+  const current = currentUser(customerId);
+  if (isErr(current)) return current;
+  const state = sweepExpired();
+  const locks = (state.locks ?? []).filter((lock) => lock.customerId !== current.id);
+  writeLog(current, "delete", "carrinho", { clear: true }, { locks });
+  return { ok: true, ...getCart(current.id) };
+}
+
+export function dismissExpiredCart(customerId: string | null) {
+  const current = currentUser(customerId);
+  if (isErr(current)) return current;
+  const state = sweepExpired();
+  setState({
+    ...state,
+    expiredCart: (state.expiredCart ?? []).filter((item) => item.customerId !== current.id),
+  });
+  return { ok: true, ...getCart(current.id) };
+}
+
+export function expireCustomerLocks(customerId: string | null) {
+  const current = currentUser(customerId);
+  if (isErr(current)) return current;
+  const state = getState();
+  const past = new Date(nowMs() - 1000).toISOString();
+  setState({
+    ...state,
+    locks: (state.locks ?? []).map((lock) =>
+      lock.customerId === current.id ? { ...lock, expiresAt: past } : lock
+    ),
+  });
+  sweepExpired();
+  return { ok: true, ...getCart(current.id) };
+}
+
+function buildItems(lines: CartLine[], customerId?: string): OrderItem[] | Err {
+  const state = sweepExpired();
+  const catalog = state.catalog;
   if (!lines.length) return { error: "Carrinho vazio." };
-  const stockErr = validateCartStock(lines, catalog);
-  if (stockErr) return { error: stockErr };
+  const now = nowMs();
+  const byProduct = new Map<string, number>();
+  for (const line of lines) {
+    const qty = Math.round(Number(line.quantity) || 0);
+    if (qty < 1) return { error: "Quantidade inválida." };
+    byProduct.set(line.productId, (byProduct.get(line.productId) ?? 0) + qty);
+  }
+  for (const [productId, qty] of byProduct) {
+    const product = catalog.find((item) => item.id === productId);
+    if (!product || !isListedProduct(product)) return { error: "Produto indisponível." };
+    const stock = displayAvailable(product, state.locks ?? [], now, customerId);
+    if (stock <= 0) return { error: `${product.name} está indisponível em estoque.` };
+    if (qty > stock) return { error: `Quantidade de ${product.name} acima do estoque (${stock}).` };
+  }
   const items: OrderItem[] = [];
   for (const line of lines) {
     const product = catalog.find((p) => p.id === line.productId);
-    if (!product) return { error: "Produto indisponível." };
+    if (!product || !isListedProduct(product)) return { error: "Produto indisponível." };
     if (!product.colors.includes(line.color)) return { error: "Cor indisponível para este produto." };
     const quantity = Math.max(1, Math.round(Number(line.quantity) || 0));
     items.push({
@@ -547,7 +854,7 @@ export function quoteCheckout(
 ) {
   const current = currentUser(customerId);
   if (isErr(current)) return current;
-  const items = buildItems(input.items);
+  const items = buildItems(input.items, current.id);
   if (isErr(items)) return items;
   const couponRes = resolveCoupons(input.couponCodes ?? [], current.email);
   if (isErr(couponRes)) return couponRes;
@@ -584,8 +891,8 @@ export function placeOrder(
     saveAddress?: boolean;
     shippingId: string;
     couponCodes: string[];
-    payments: { cardId: string; amount: number }[];
-    items: CartLine[];
+    payments: { cardId: string; amount: number; cvv?: string }[];
+    items?: CartLine[];
     newCard?: {
       holder: string;
       number: string;
@@ -600,8 +907,32 @@ export function placeOrder(
   const current = currentUser(customerId);
   if (isErr(current)) return current;
   if (current.status === "inativo") return { error: "Conta inativa." };
+  sweepExpired();
+  const locked = cartLinesOf(current.id);
+  const source = locked.length ? locked : input.items ?? [];
+  const reviewed = revalidateLines(source, getState().catalog, getState().locks ?? [], nowMs(), current.id);
+  if (reviewed.alerts.length) {
+    const ttl = getState().lockTtlMs || 15 * 60 * 1000;
+    const now = nowMs();
+    const expiresAt = new Date(now + ttl).toISOString();
+    const otherLocks = (getState().locks ?? []).filter((lock) => lock.customerId !== current.id);
+    const nextLocks: CartLock[] = [
+      ...otherLocks,
+      ...reviewed.lines.map((line) => ({
+        id: uid("lock"),
+        customerId: current.id,
+        productId: line.productId,
+        color: line.color,
+        quantity: line.quantity,
+        lockedAt: new Date(now).toISOString(),
+        expiresAt,
+      })),
+    ];
+    setState({ ...getState(), locks: nextLocks });
+    return { error: reviewed.alerts.join(" "), alerts: reviewed.alerts };
+  }
   const quote = quoteCheckout(customerId, {
-    items: input.items,
+    items: reviewed.lines,
     couponCodes: input.couponCodes,
     shippingId: input.shippingId,
     cep:
@@ -656,6 +987,20 @@ export function placeOrder(
     return { cardId: p.cardId, last4: "0000", brand: "Cartão", amount: roundMoney(p.amount) };
   });
 
+  const operatorOk = payments.every((pay, index) => {
+    const cvv =
+      paymentsInput[index] && "cvv" in paymentsInput[index]
+        ? String((paymentsInput[index] as { cvv?: string }).cvv ?? "")
+        : pay.cardId === "new" || (input.newCard && input.newCard.save === false)
+          ? input.newCard?.cvv
+          : input.payments?.find((p) => p.cardId === pay.cardId)?.cvv;
+    const fallbackCvv =
+      input.newCard && (pay.last4 === input.newCard.number.replace(/\D/g, "").slice(-4))
+        ? input.newCard.cvv
+        : cvv;
+    return operatorAccepts(fallbackCvv, pay.last4);
+  });
+
   let address: Address | undefined;
   if (input.addressId) {
     address = live.addresses.find((a) => a.id === input.addressId);
@@ -679,9 +1024,12 @@ export function placeOrder(
   if (isErr(couponRes)) return couponRes;
 
   const at = new Date().toISOString();
-  let coupons = getState().coupons;
+  const approveAt = new Date(Date.now() + 20).toISOString();
+  const couponErrs = couponRes.coupons
+    .map((coupon) => couponStillValid(coupon, live.email))
+    .filter((msg): msg is string => Boolean(msg));
+  const approved = operatorOk && couponErrs.length === 0;
   const usedIds = new Set(couponRes.coupons.map((c) => c.id));
-  coupons = coupons.map((c) => (usedIds.has(c.id) ? { ...c, used: true } : c));
 
   const order: Order = {
     id: `3DS-${Date.now().toString().slice(-6)}`,
@@ -702,20 +1050,40 @@ export function placeOrder(
     total: quote.total,
   };
 
-  if (quote.couponExcess > 0.009) {
-    const extra: Coupon = {
-      id: uid("c"),
-      code: `TROCA-${order.id.slice(-6)}`,
-      type: "troca",
-      value: quote.couponExcess,
-      ownerEmail: live.email.toLowerCase(),
-      used: false,
-      description: `R$ ${quote.couponExcess.toFixed(2).replace(".", ",")} de diferença da compra ${order.id}`,
-    };
-    coupons = [...coupons, extra];
-    order.exchangeCouponCode = extra.code;
-    order.exchangeCouponValue = extra.value;
+  let coupons = getState().coupons;
+  let catalog = getState().catalog;
+  if (approved) {
+    coupons = coupons.map((c) => (usedIds.has(c.id) ? { ...c, used: true } : c));
+    catalog = catalog.map((product) => {
+      const qty = order.items
+        .filter((item) => item.productId === product.id)
+        .reduce((sum, item) => sum + item.quantity, 0);
+      if (!qty) return product;
+      return { ...product, stock: Math.max(0, physicalStock(product) - qty) };
+    });
+    if (quote.couponExcess > 0.009) {
+      const extra: Coupon = {
+        id: uid("c"),
+        code: `TROCA-${order.id.slice(-6)}`,
+        type: "troca",
+        value: quote.couponExcess,
+        ownerEmail: live.email.toLowerCase(),
+        used: false,
+        description: `R$ ${quote.couponExcess.toFixed(2).replace(".", ",")} de diferença da compra ${order.id}`,
+      };
+      coupons = [...coupons, extra];
+      order.exchangeCouponCode = extra.code;
+      order.exchangeCouponValue = extra.value;
+    }
+    order.status = "APROVADA";
+    order.history = [...order.history, { status: "APROVADA", at: approveAt, by: "sistema" }];
+  } else {
+    order.status = "REPROVADA";
+    order.history = [...order.history, { status: "REPROVADA", at: approveAt, by: "sistema" }];
   }
+
+  const locks = (getState().locks ?? []).filter((lock) => lock.customerId !== live.id);
+  const expiredCart = (getState().expiredCart ?? []).filter((item) => item.customerId !== live.id);
 
   writeLog(
     live,
@@ -730,8 +1098,9 @@ export function placeOrder(
       payments: order.payments,
       address: { id: address.id, label: address.label, cep: address.cep },
       exchangeCouponCode: order.exchangeCouponCode,
+      payment: approved ? "aprovado" : "reprovado",
     },
-    { customers, orders: [order, ...getState().orders], coupons }
+    { customers, orders: [order, ...getState().orders], coupons, catalog, locks, expiredCart }
   );
   return { id: order.id, order: publicOrder(order) };
 }
@@ -759,57 +1128,45 @@ function setOrderStatus(
   });
 }
 
-export function cancelOrder(customerId: string | null, id: string) {
-  const current = currentUser(customerId);
-  if (isErr(current)) return current;
-  const order = getState().orders.find((o) => o.id === id);
-  if (!order || order.customerId !== current.id) return { error: "Pedido não encontrado." };
-  if (!orderActionsSafe(order).cancel) return { error: "Este pedido não pode mais ser cancelado." };
-  setOrderStatus(id, "CANCELADO", "cliente");
-  return { ok: true };
-}
-
 function orderActionsSafe(order: Order) {
   return publicOrder(order).actions;
 }
 
-export function confirmReceipt(customerId: string | null, id: string) {
-  const current = currentUser(customerId);
-  if (isErr(current)) return current;
-  const order = getState().orders.find((o) => o.id === id);
-  if (!order || order.customerId !== current.id) return { error: "Pedido não encontrado." };
-  const actions = orderActionsSafe(order);
-  if (!actions.confirmReceipt) {
-    return {
-      error: actions.pickup
-        ? "A retirada só pode ser confirmada após o pagamento."
-        : "Só é possível confirmar após o envio.",
-    };
-  }
-  setOrderStatus(id, "ENTREGUE", "cliente");
-  return { ok: true };
-}
-
-export function requestExchange(customerId: string | null, orderId: string, itemId: string, qty: number) {
+export function requestExchange(
+  customerId: string | null,
+  orderId: string,
+  itemId: string,
+  qty: number,
+  whole = false
+) {
   const current = currentUser(customerId);
   if (isErr(current)) return current;
   const order = getState().orders.find((o) => o.id === orderId);
   if (!order || order.customerId !== current.id) return { error: "Pedido não encontrado." };
-  if (!orderActionsSafe(order).requestExchange) return { error: "A troca só pode ser pedida após a entrega." };
+  if (order.status !== "ENTREGUE") return { error: "A troca só pode ser pedida após a entrega." };
+  if (whole) {
+    setOrderStatus(orderId, "EM_TROCA", "cliente", { exchangeWhole: true, exchangeItemId: undefined, exchangeQty: undefined });
+    writeLog(current, "update", "pedido", { id: orderId, status: "EM_TROCA", whole: true });
+    return { ok: true };
+  }
   const item = order.items.find((i) => i.id === itemId);
   if (!item) return { error: "Item não encontrado." };
   if (qty < 1 || qty > item.quantity) return { error: "Quantidade inválida." };
-  setOrderStatus(orderId, "TROCA_SOLICITADA", "cliente", { exchangeItemId: itemId, exchangeQty: qty });
+  setOrderStatus(orderId, "EM_TROCA", "cliente", { exchangeItemId: itemId, exchangeQty: qty, exchangeWhole: false });
+  writeLog(current, "update", "pedido", { id: orderId, status: "EM_TROCA", itemId, qty });
   return { ok: true };
 }
 
-export function dispatchExchangeItem(customerId: string | null, orderId: string) {
+export function markNotificationRead(customerId: string | null, id: string) {
   const current = currentUser(customerId);
   if (isErr(current)) return current;
-  const order = getState().orders.find((o) => o.id === orderId);
-  if (!order || order.customerId !== current.id) return { error: "Pedido não encontrado." };
-  if (!orderActionsSafe(order).dispatchItem) return { error: "Aguarde a aceitação da troca." };
-  setOrderStatus(orderId, "ITEM_ENVIADO", "cliente");
+  const state = getState();
+  setState({
+    ...state,
+    notifications: (state.notifications ?? []).map((n) =>
+      n.id === id && n.customerId === current.id ? { ...n, read: true } : n
+    ),
+  });
   return { ok: true };
 }
 
@@ -820,77 +1177,87 @@ export function adminSetStatus(adminId: string | null, orderId: string, status: 
   if (!order) return { error: "Pedido não encontrado." };
   const allowed = orderActionsSafe(order).adminNext;
   if (!allowed.includes(status)) return { error: "Transição de status inválida." };
-  if (status === "EM_TRANSITO" && orderActionsSafe(order).pickup) {
-    return { error: "Pedidos de retirada no ateliê não entram em trânsito." };
-  }
-  if (status === "PAGAMENTO_REALIZADO") {
-    return { error: "O pagamento é confirmado automaticamente pelo sistema." };
-  }
 
-  if (status === "EM_PROCESSAMENTO") {
+  if (status === "TROCA_AUTORIZADA") {
     const at = new Date().toISOString();
     const state = getState();
+    const note = {
+      id: uid("n"),
+      customerId: order.customerId,
+      at,
+      title: "Troca autorizada",
+      body: `A troca do pedido ${order.id} foi autorizada.`,
+      orderId: order.id,
+      read: false,
+    };
     setState({
       ...state,
-      orders: state.orders.map((o) => {
-        if (o.id !== orderId) return o;
-        const processing: Order = {
-          ...o,
-          status: "EM_PROCESSAMENTO",
-          history: [...o.history, { status: "EM_PROCESSAMENTO", at, by: "admin" as const }],
-        };
-        return settlePaymentIfDue(processing, new Date(Date.now() + 1000).toISOString());
-      }),
+      notifications: [note, ...(state.notifications ?? [])],
+      orders: state.orders.map((o) =>
+        o.id === orderId
+          ? { ...o, status, history: [...o.history, { status, at, by: "admin" as const }] }
+          : o
+      ),
     });
+    writeLog(admin, "update", "pedido", { id: orderId, status });
     return { ok: true };
   }
 
-  if (status === "TROCA_PROCESSADA") {
-    const item = order.items.find((i) => i.id === order.exchangeItemId) ?? order.items[0];
-    const line = item ? item.unitPrice * (order.exchangeQty ?? item.quantity) : 0;
-    const value =
-      order.subtotal > 0 ? Math.min(100, Math.max(1, Math.round((line / order.subtotal) * 100))) : 10;
+  if (status === "TROCADO") {
+    const value = exchangeValue(order);
     const coupon: Coupon = {
       id: uid("c"),
       code: `TROCA-${order.id.slice(-6)}`,
       type: "troca",
       value,
-      ownerEmail: order.customerEmail,
+      ownerEmail: order.customerEmail.toLowerCase(),
       used: false,
-      description: `${value}% de desconto pela troca do pedido ${order.id}`,
+      description: `R$ ${value.toFixed(2).replace(".", ",")} de cupom de troca do pedido ${order.id}`,
     };
     const at = new Date().toISOString();
     const state = getState();
     setState({
       ...state,
       coupons: [...state.coupons, coupon],
+      catalog: restockExchange(state.catalog, order),
       orders: state.orders.map((o) =>
         o.id === orderId
           ? {
               ...o,
               status,
               history: [...o.history, { status, at, by: "admin" as const }],
+              exchangeCouponCode: coupon.code,
+              exchangeCouponValue: coupon.value,
             }
           : o
       ),
     });
+    writeLog(admin, "update", "pedido", { id: orderId, status, coupon: coupon.code, value });
     return { ok: true };
   }
 
   setOrderStatus(orderId, status, "admin");
+  writeLog(admin, "update", "pedido", { id: orderId, status });
   return { ok: true };
 }
 
-export function adminChart(adminId: string | null, categoryIds: string[] = []) {
+export function adminChart(
+  adminId: string | null,
+  categoryIds: string[] = [],
+  startIso?: string,
+  endIso?: string
+) {
   const admin = requireAdmin(adminId);
   if (isErr(admin)) return admin;
+  const start = startIso || "2026-01-01T00:00:00.000Z";
+  const end = endIso || "2026-12-31T23:59:59.000Z";
+  const periodErr = validateChartPeriod(start, end);
+  if (periodErr) return { error: periodErr };
   const ids = categoryIds.filter((id): id is (typeof categories)[number]["id"] =>
     categories.some((c) => c.id === id)
   );
-  const chart = chartFromOrders(getState().orders, categories, ids);
-  const revenue = chart.months.reduce((s, m) => s + m.total, 0);
-  const orderCount = chart.months.reduce((s, m) => s + m.count, 0);
-  return { ...chart, revenue, orderCount, totalOrders: getState().orders.length };
+  const chart = salesByCategoryMonth(getState().orders, start, end, ids);
+  return { ...chart, totalOrders: getState().orders.length, start, end };
 }
 
 export function adminCustomers(adminId: string | null, filter: CustomerFilter) {

@@ -1,0 +1,844 @@
+   0| Plano de Testes
+   1| Sistema de Gestão Acadêmica (SGA)
+   2| Sprint 3: Cadastro, Matrícula, Notas e Histórico
+   3| Histórico de Versões
+   4| Data
+   5| Versão
+   6| Descrição
+   7| Autor
+   8| Revisor
+   9| 05/10/26
+  10| 1.0
+  11| Versão inicial: escopo, estratégia e casos de teste da Sprint 3
+  12| Ana Beatriz Lima
+  13| Carlos Eduardo Nunes
+  14| 12/10/26
+  15| 1.1
+  16| Inclusão dos resultados de execução e do registro de defeitos
+  17| Lucas Martins
+  18| Fernanda Oliveira
+  19| Cliente
+  20| Secretaria Acadêmica (cliente simulado)
+  21| Documento
+  22| Plano de Testes: Sistema de Gestão Acadêmica (SGA)
+  23| Data
+  24| 12 de outubro de 2026
+  25| Autor(es)
+  26| Ana Beatriz Lima
+  27| RA 0000000001
+  28| Carlos Eduardo Nunes
+  29| RA 0000000002
+  30| Fernanda Oliveira
+  31| RA 0000000003
+  32| Lucas Martins
+  33| RA 0000000004
+  34| Documento base
+  35| DRS_SGA versão 1.2
+  36| Página de Assinaturas
+  37| Revisado e Aprovado por:
+  38| Carlos Eduardo Nunes (líder do grupo)
+  39| 12.10.26
+  40| Revisado e Aprovado por:
+  41| Professor responsável
+  42| dd.mm.aa
+  43| Índice
+  44| 1. Introdução4
+  45| 1.1 Objetivo4
+  46| 1.2 Escopo4
+  47| 1.3 Documentos de referência4
+  48| 1.4 Definições e siglas4
+  49| 2. Itens a serem testados4
+  50| 3. Itens fora do escopo5
+  51| 4. Estratégia de testes5
+  52| 4.1 Níveis de teste5
+  53| 4.2 Tipos de teste5
+  54| 4.3 Técnicas de projeto de casos de teste6
+  55| 5. Ambiente de testes6
+  56| 6. Critérios6
+  57| 7. Casos de teste6
+  58| 7.1 Resumo dos casos de teste6
+  59| 7.2 Especificação dos casos de teste7
+  60| 8. Matriz de rastreabilidade13
+  61| 9. Cronograma e responsabilidades13
+  62| 10. Riscos e contingências13
+  63| 11. Gestão de defeitos14
+  64| 11.1 Classificação de severidade14
+  65| 11.2 Registro de defeitos14
+  66| 12. Entregáveis14
+  67| Para atualizar o índice no Word, clique com o botão direito sobre ele e escolha "Atualizar campo".
+  68| 1. Introdução
+  69| 1.1 Objetivo
+  70| Este documento define o planejamento dos testes do incremento entregue na Sprint 3 do Sistema de Gestão Acadêmica (SGA), incluindo o cadastro de alunos, a matrícula em disciplinas, o lançamento de notas e a emissão do histórico escolar. O plano estabelece o que será testado, as técnicas e ferramentas a serem utilizadas, os responsáveis e os critérios que determinam se o incremento está apto a ser apresentado ao cliente na revisão da sprint.
+  71| 1.2 Escopo
+  72| Estão cobertos os requisitos RF001 a RF004, as regras de negócio RN001 a RN008 e os requisitos não funcionais RNF001 a RNF003 do DRS_SGA versão 1.2. Os testes abrangem os níveis unitário, de integração e de sistema, com automação dos casos de maior prioridade.
+  73| 1.3 Documentos de referência
+  74| Documento
+  75| Versão
+  76| Observação
+  77| DRS_SGA: Documento de Requisitos de Software
+  78| 1.2
+  79| Fonte de todos os requisitos rastreados
+  80| Especificações de Caso de Uso UC01 a UC04
+  81| 1.0
+  82| Fluxos principais e de exceção utilizados nos casos de teste
+  83| DVP_SGA: Documento de Visão do Projeto
+  84| 1.0
+  85| Contexto e objetivos do sistema
+  86| 1.4 Definições e siglas
+  87| Termo
+  88| Definição
+  89| RF / RN / RNF
+  90| Requisito Funcional / Regra de Negócio / Requisito Não Funcional
+  91| CT
+  92| Caso de Teste
+  93| E2E
+  94| End to End: teste que percorre o fluxo completo pela interface do usuário
+  95| RA
+  96| Registro Acadêmico: identificador único do aluno
+  97| Período de matrícula
+  98| Intervalo de datas definido pela secretaria em que a matrícula é permitida
+  99| 2. Itens a serem testados
+ 100| Funcionalidade
+ 101| Requisitos (DRS)
+ 102| Caso de uso
+ 103| Prioridade
+ 104| Cadastro de alunos
+ 105| RF001, RN001, RN002
+ 106| UC01
+ 107| Alta
+ 108| Matrícula em disciplinas
+ 109| RF002, RN003, RN004, RN005, RN008
+ 110| UC02
+ 111| Alta
+ 112| Lançamento de notas e frequência
+ 113| RF003, RN006, RN007
+ 114| UC03
+ 115| Alta
+ 116| Emissão de histórico escolar
+ 117| RF004, RNF001
+ 118| UC04
+ 119| Média
+ 120| Requisitos transversais
+ 121| RNF002, RNF003
+ 122| Todos
+ 123| Média
+ 124| Requisitos do DRS_SGA considerados neste plano
+ 125| ID
+ 126| Descrição
+ 127| RF001
+ 128| O sistema deve permitir cadastrar, alterar, consultar e inativar alunos
+ 129| RF002
+ 130| O sistema deve permitir ao aluno realizar matrícula nas disciplinas oferecidas no semestre
+ 131| RF003
+ 132| O sistema deve permitir ao professor lançar notas e frequência dos alunos de suas turmas
+ 133| RF004
+ 134| O sistema deve permitir ao aluno emitir o histórico escolar em PDF
+ 135| RN001
+ 136| O CPF do aluno deve ser válido e único no sistema
+ 137| RN002
+ 138| O RA deve ser gerado automaticamente pelo sistema no formato AAAASNNNN
+ 139| RN003
+ 140| O aluno pode estar matriculado em no máximo 7 disciplinas por semestre
+ 141| RN004
+ 142| A matrícula só é permitida se o aluno tiver sido aprovado nas disciplinas pré-requisito
+ 143| RN005
+ 144| Cada turma possui capacidade máxima de 40 alunos
+ 145| RN006
+ 146| A nota deve estar entre 0,0 e 10,0, com no máximo uma casa decimal
+ 147| RN007
+ 148| É aprovado o aluno com média final maior ou igual a 6,0 e frequência maior ou igual a 75%
+ 149| RN008
+ 150| A matrícula só pode ser realizada dentro do período de matrícula definido pela secretaria
+ 151| RNF001
+ 152| A emissão do histórico escolar deve ocorrer em no máximo 3 segundos
+ 153| RNF002
+ 154| As senhas dos usuários devem ser armazenadas com hash criptográfico
+ 155| RNF003
+ 156| O sistema deve funcionar nas versões atuais dos navegadores Chrome e Firefox
+ 157| 3. Itens fora do escopo
+ 158| Item
+ 159| Motivo da exclusão
+ 160| Trancamento e cancelamento de matrícula
+ 161| Funcionalidade prevista para a Sprint 4
+ 162| Emissão de diploma e certificados
+ 163| Não faz parte do DRS_SGA versão 1.2
+ 164| Integração com o sistema financeiro
+ 165| Não faz parte do DRS_SGA versão 1.2
+ 166| Testes de carga com múltiplos usuários simultâneos
+ 167| Não há RNF que defina volume de usuários; registrado como risco R3
+ 168| 4. Estratégia de testes
+ 169| 4.1 Níveis de teste
+ 170| Nível
+ 171| Objetivo
+ 172| Ferramenta
+ 173| Responsável
+ 174| Unitário
+ 175| Verificar isoladamente as validações de CPF e nota e o cálculo da situação final
+ 176| JUnit 5
+ 177| Lucas Martins
+ 178| Integração
+ 179| Verificar as regras de matrícula envolvendo serviço e banco de dados
+ 180| JUnit 5 com H2 em memória
+ 181| Lucas Martins
+ 182| Sistema (E2E)
+ 183| Verificar os fluxos completos de cadastro, matrícula e histórico pela interface
+ 184| Cypress 13
+ 185| Ana Beatriz Lima e Fernanda Oliveira
+ 186| Aceitação
+ 187| Demonstrar os fluxos ao cliente na revisão da sprint
+ 188| Execução manual
+ 189| Carlos Eduardo Nunes
+ 190| 4.2 Tipos de teste
+ 191| Funcional: todos os casos CT001 a CT010 verificam o comportamento definido pelos RF e RN.
+ 192| Regressão: a suíte automatizada completa é executada no pipeline de integração contínua a cada push na branch principal.
+ 193| Não funcional: desempenho da emissão do histórico (RNF001, CT010) e compatibilidade de navegadores (RNF003, CT001 e CT004 executados em Chrome e Firefox).
+ 194| 4.3 Técnicas de projeto de casos de teste
+ 195| Técnica
+ 196| Onde foi aplicada
+ 197| Partição de equivalência
+ 198| Validação de CPF (CT001, CT002, CT003) e condições de matrícula (CT004, CT005)
+ 199| Análise de valor limite
+ 200| Capacidade da turma (CT006), limite de disciplinas (CT007) e intervalo da nota (CT008)
+ 201| Tabela de decisão
+ 202| Situação final combinando média e frequência (CT009)
+ 203| Teste baseado em cenário
+ 204| Emissão do histórico escolar com medição de tempo (CT010)
+ 205| 5. Ambiente de testes
+ 206| Sistema operacional
+ 207| Windows 11 e Ubuntu 24.04 (pipeline de integração contínua)
+ 208| Navegadores e versões
+ 209| Google Chrome e Mozilla Firefox, versões estáveis vigentes em outubro de 2026
+ 210| Banco de dados
+ 211| PostgreSQL 16 com base dedicada sga_teste; H2 em memória para testes de integração
+ 212| Ferramentas
+ 213| JUnit 5, Cypress 13, GitHub Actions (execução automática) e GitHub Issues (registro de defeitos)
+ 214| URL / servidor
+ 215| http://localhost:8080 (local) e ambiente de homologação do grupo
+ 216| Massa de dados
+ 217| Script seed-teste.sql recriado antes de cada execução, com 10 alunos, 6 disciplinas, 8 turmas e período de matrícula aberto
+ 218| 6. Critérios
+ 219| Critérios de entrada
+ 220| Build da Sprint 3 implantado no ambiente de testes; massa de dados carregada; casos de teste revisados por um integrante que não os escreveu
+ 221| Critérios de saída
+ 222| 100% dos casos de prioridade Alta aprovados; nenhum defeito de severidade Crítica ou Alta aberto; todos os requisitos da seção 2 cobertos ou com lacuna justificada
+ 223| Critérios de suspensão
+ 224| Falha na autenticação ou na conexão com o banco de dados que impeça a execução de mais de 50% dos casos
+ 225| Critérios de retomada
+ 226| Correção do defeito bloqueante implantada e validada por reteste do caso afetado
+ 227| 7. Casos de teste
+ 228| 7.1 Resumo dos casos de teste
+ 229| ID
+ 230| Título
+ 231| Requisitos
+ 232| Prioridade
+ 233| Automatizado
+ 234| CT001
+ 235| Cadastrar aluno com dados válidos
+ 236| RF001, RN001, RN002, RNF003
+ 237| Alta
+ 238| Sim
+ 239| CT002
+ 240| Impedir cadastro de aluno com CPF já cadastrado
+ 241| RF001, RN001
+ 242| Alta
+ 243| Sim
+ 244| CT003
+ 245| Validar formato e dígitos verificadores do CPF
+ 246| RN001
+ 247| Alta
+ 248| Sim
+ 249| CT004
+ 250| Matricular aluno em disciplina com vaga e pré-requisito cumprido
+ 251| RF002, RN003, RN004, RN005, RN008
+ 252| Alta
+ 253| Sim
+ 254| CT005
+ 255| Bloquear matrícula sem pré-requisito cumprido
+ 256| RF002, RN004
+ 257| Alta
+ 258| Sim
+ 259| CT006
+ 260| Respeitar a capacidade máxima da turma
+ 261| RF002, RN005
+ 262| Alta
+ 263| Sim
+ 264| CT007
+ 265| Respeitar o limite de disciplinas por semestre
+ 266| RF002, RN003
+ 267| Média
+ 268| Sim
+ 269| CT008
+ 270| Validar intervalo da nota lançada
+ 271| RF003, RN006
+ 272| Alta
+ 273| Sim
+ 274| CT009
+ 275| Calcular a situação final do aluno na disciplina
+ 276| RF003, RN007
+ 277| Alta
+ 278| Sim
+ 279| CT010
+ 280| Emitir histórico escolar dentro do tempo de resposta
+ 281| RF004, RNF001
+ 282| Média
+ 283| Parcial
+ 284| 7.2 Especificação dos casos de teste
+ 285| CT001  Cadastrar aluno com dados válidos
+ 286| Requisitos rastreados
+ 287| RF001, RN001, RN002, RNF003
+ 288| Caso de uso relacionado
+ 289| UC01 Manter Cadastro de Alunos
+ 290| Nível / Tipo
+ 291| Sistema (E2E) / Funcional
+ 292| Técnica de projeto
+ 293| Partição de equivalência (classe válida para todos os campos)
+ 294| Prioridade
+ 295| Alta
+ 296| Pré-condições
+ 297| Usuário da secretaria autenticado; CPF 529.982.247-25 não cadastrado na base
+ 298| Dados de teste
+ 299| Nome: Mariana Souza Prado; CPF: 529.982.247-25; data de nascimento: 14/03/2004; e-mail: mariana.prado@email.com; curso: ADS
+ 300| Passo
+ 301| Ação
+ 302| Resultado esperado
+ 303| 1
+ 304| Acessar o menu Alunos > Novo aluno
+ 305| Formulário de cadastro é exibido com todos os campos vazios
+ 306| 2
+ 307| Preencher os campos com os dados de teste
+ 308| Campos aceitam os valores sem mensagens de erro
+ 309| 3
+ 310| Acionar o botão "Salvar"
+ 311| Mensagem "Aluno cadastrado com sucesso" é exibida
+ 312| 4
+ 313| Consultar o aluno pelo CPF informado
+ 314| Aluno é listado com situação "Ativo" e RA gerado automaticamente no formato AAAASNNNN (RN002)
+ 315| Pós-condições
+ 316| Aluno cadastrado, ativo e com RA único
+ 317| Automatizado?
+ 318| Sim, Cypress (cypress/e2e/alunos/cadastro-valido.cy.js); executado em Chrome e Firefox (RNF003)
+ 319| Resultado da execução
+ 320| Aprovado em 09/10/2026 por Ana Beatriz Lima
+ 321| CT002  Impedir cadastro de aluno com CPF já cadastrado
+ 322| Requisitos rastreados
+ 323| RF001, RN001
+ 324| Caso de uso relacionado
+ 325| UC01 Manter Cadastro de Alunos (fluxo de exceção FE01)
+ 326| Nível / Tipo
+ 327| Sistema (E2E) / Funcional
+ 328| Técnica de projeto
+ 329| Partição de equivalência (classe inválida: CPF duplicado)
+ 330| Prioridade
+ 331| Alta
+ 332| Pré-condições
+ 333| Aluno com CPF 529.982.247-25 já cadastrado (resultado do CT001 ou massa de dados)
+ 334| Dados de teste
+ 335| Nome: Pedro Henrique Alves; CPF: 529.982.247-25; demais campos válidos
+ 336| Passo
+ 337| Ação
+ 338| Resultado esperado
+ 339| 1
+ 340| Acessar o menu Alunos > Novo aluno
+ 341| Formulário de cadastro é exibido
+ 342| 2
+ 343| Preencher os campos com os dados de teste e acionar "Salvar"
+ 344| Mensagem "CPF já cadastrado" é exibida junto ao campo CPF
+ 345| 3
+ 346| Consultar alunos pelo CPF informado
+ 347| Apenas um registro é retornado (o cadastro original)
+ 348| Pós-condições
+ 349| Nenhum novo registro criado
+ 350| Automatizado?
+ 351| Sim, Cypress (cypress/e2e/alunos/cpf-duplicado.cy.js)
+ 352| Resultado da execução
+ 353| Aprovado em 09/10/2026 por Ana Beatriz Lima
+ 354| CT003  Validar formato e dígitos verificadores do CPF
+ 355| Requisitos rastreados
+ 356| RN001
+ 357| Caso de uso relacionado
+ 358| UC01 Manter Cadastro de Alunos
+ 359| Nível / Tipo
+ 360| Unitário / Funcional
+ 361| Técnica de projeto
+ 362| Partição de equivalência (uma classe válida e quatro inválidas)
+ 363| Prioridade
+ 364| Alta
+ 365| Pré-condições
+ 366| Classe ValidadorCpf disponível para teste isolado
+ 367| Dados de teste
+ 368| Ver tabela de partições abaixo
+ 369| Passo
+ 370| Ação
+ 371| Resultado esperado
+ 372| 1
+ 373| Executar o método validar() com cada valor da tabela de partições
+ 374| O retorno de cada chamada corresponde à coluna "Resultado esperado" da tabela
+ 375| Pós-condições
+ 376| Não se aplica (teste sem efeito colateral)
+ 377| Automatizado?
+ 378| Sim, JUnit (src/test/java/sga/aluno/ValidadorCpfTest.java)
+ 379| Resultado da execução
+ 380| Aprovado em 08/10/2026 por Lucas Martins
+ 381| Tabela de partições do CPF
+ 382| Classe
+ 383| Valor de entrada
+ 384| Resultado esperado
+ 385| Válida: CPF com dígitos corretos
+ 386| 529.982.247-25
+ 387| true
+ 388| Inválida: dígito verificador incorreto
+ 389| 529.982.247-26
+ 390| false
+ 391| Inválida: todos os dígitos iguais
+ 392| 111.111.111-11
+ 393| false
+ 394| Inválida: quantidade de dígitos diferente de 11
+ 395| 529.982.247
+ 396| false
+ 397| Inválida: caracteres não numéricos
+ 398| 52A.982.247-25
+ 399| false
+ 400| CT004  Matricular aluno em disciplina com vaga e pré-requisito cumprido
+ 401| Requisitos rastreados
+ 402| RF002, RN003, RN004, RN005, RN008
+ 403| Caso de uso relacionado
+ 404| UC02 Realizar Matrícula em Disciplinas
+ 405| Nível / Tipo
+ 406| Sistema (E2E) / Funcional
+ 407| Técnica de projeto
+ 408| Partição de equivalência (todas as condições atendidas)
+ 409| Prioridade
+ 410| Alta
+ 411| Pré-condições
+ 412| Período de matrícula aberto (RN008); aluno RA 20262A0001 aprovado em Algoritmos; turma de Estrutura de Dados com 20 matriculados e capacidade 40; aluno com 3 disciplinas no semestre
+ 413| Dados de teste
+ 414| Aluno: RA 20262A0001; disciplina: Estrutura de Dados, turma A, noite
+ 415| Passo
+ 416| Ação
+ 417| Resultado esperado
+ 418| 1
+ 419| Autenticar como aluno e acessar Matrícula
+ 420| Lista de disciplinas disponíveis é exibida com a quantidade de vagas
+ 421| 2
+ 422| Selecionar Estrutura de Dados, turma A, e acionar "Confirmar matrícula"
+ 423| Mensagem "Matrícula realizada" é exibida
+ 424| 3
+ 425| Acessar "Minhas disciplinas"
+ 426| Estrutura de Dados consta na lista; total de disciplinas passa a 4
+ 427| Pós-condições
+ 428| Matrícula registrada; vagas da turma reduzidas para 19
+ 429| Automatizado?
+ 430| Sim, Cypress (cypress/e2e/matricula/matricula-valida.cy.js); executado em Chrome e Firefox (RNF003)
+ 431| Resultado da execução
+ 432| Aprovado em 10/10/2026 por Fernanda Oliveira
+ 433| CT005  Bloquear matrícula sem pré-requisito cumprido
+ 434| Requisitos rastreados
+ 435| RF002, RN004
+ 436| Caso de uso relacionado
+ 437| UC02 Realizar Matrícula em Disciplinas (fluxo de exceção FE02)
+ 438| Nível / Tipo
+ 439| Sistema (E2E) / Funcional
+ 440| Técnica de projeto
+ 441| Partição de equivalência (classe inválida: pré-requisito pendente)
+ 442| Prioridade
+ 443| Alta
+ 444| Pré-condições
+ 445| Período de matrícula aberto; aluno RA 20262A0002 sem aprovação em Algoritmos
+ 446| Dados de teste
+ 447| Aluno: RA 20262A0002; disciplina: Estrutura de Dados, turma A
+ 448| Passo
+ 449| Ação
+ 450| Resultado esperado
+ 451| 1
+ 452| Autenticar como aluno e acessar Matrícula
+ 453| Lista de disciplinas é exibida
+ 454| 2
+ 455| Selecionar Estrutura de Dados e acionar "Confirmar matrícula"
+ 456| Mensagem "Pré-requisito não cumprido: Algoritmos" é exibida e a matrícula não é efetivada
+ 457| Pós-condições
+ 458| Nenhuma matrícula registrada; vagas da turma inalteradas
+ 459| Automatizado?
+ 460| Sim, Cypress (cypress/e2e/matricula/sem-pre-requisito.cy.js)
+ 461| Resultado da execução
+ 462| Aprovado em 10/10/2026 por Fernanda Oliveira
+ 463| CT006  Respeitar a capacidade máxima da turma
+ 464| Requisitos rastreados
+ 465| RF002, RN005
+ 466| Caso de uso relacionado
+ 467| UC02 Realizar Matrícula em Disciplinas
+ 468| Nível / Tipo
+ 469| Integração / Funcional
+ 470| Técnica de projeto
+ 471| Análise de valor limite (capacidade de 40 alunos)
+ 472| Prioridade
+ 473| Alta
+ 474| Pré-condições
+ 475| Período de matrícula aberto; turma B de Banco de Dados com capacidade 40; alunos com pré-requisito cumprido
+ 476| Dados de teste
+ 477| Ver tabela de valores limite abaixo
+ 478| Passo
+ 479| Ação
+ 480| Resultado esperado
+ 481| 1
+ 482| Preparar a turma com a quantidade de matriculados indicada em cada linha da tabela
+ 483| Base de dados reflete a quantidade informada
+ 484| 2
+ 485| Chamar o serviço de matrícula para um novo aluno
+ 486| O resultado corresponde à coluna "Resultado esperado"
+ 487| Pós-condições
+ 488| Turma nunca ultrapassa 40 matriculados
+ 489| Automatizado?
+ 490| Sim, JUnit com banco em memória (src/test/java/sga/matricula/CapacidadeTurmaIT.java)
+ 491| Resultado da execução
+ 492| Reprovado em 10/10/2026 (DF001). Reexecutado e aprovado em 11/10/2026 por Lucas Martins
+ 493| Valores limite da capacidade da turma
+ 494| Matriculados antes
+ 495| Situação
+ 496| Resultado esperado
+ 497| 38
+ 498| Abaixo do limite
+ 499| Matrícula aceita (39 matriculados)
+ 500| 39
+ 501| Imediatamente abaixo do limite
+ 502| Matrícula aceita (40 matriculados)
+ 503| 40
+ 504| No limite
+ 505| Matrícula recusada com a mensagem "Turma sem vagas"
+ 506| CT007  Respeitar o limite de disciplinas por semestre
+ 507| Requisitos rastreados
+ 508| RF002, RN003
+ 509| Caso de uso relacionado
+ 510| UC02 Realizar Matrícula em Disciplinas
+ 511| Nível / Tipo
+ 512| Integração / Funcional
+ 513| Técnica de projeto
+ 514| Análise de valor limite (máximo de 7 disciplinas)
+ 515| Prioridade
+ 516| Média
+ 517| Pré-condições
+ 518| Período de matrícula aberto; turmas com vagas; pré-requisitos cumpridos
+ 519| Dados de teste
+ 520| Aluno com 6 disciplinas e aluno com 7 disciplinas matriculadas no semestre
+ 521| Passo
+ 522| Ação
+ 523| Resultado esperado
+ 524| 1
+ 525| Solicitar nova matrícula para o aluno com 6 disciplinas
+ 526| Matrícula aceita; aluno passa a ter 7 disciplinas
+ 527| 2
+ 528| Solicitar nova matrícula para o aluno com 7 disciplinas
+ 529| Matrícula recusada com a mensagem "Limite de 7 disciplinas atingido"
+ 530| Pós-condições
+ 531| Nenhum aluno com mais de 7 disciplinas no semestre
+ 532| Automatizado?
+ 533| Sim, JUnit (src/test/java/sga/matricula/LimiteDisciplinasIT.java)
+ 534| Resultado da execução
+ 535| Aprovado em 10/10/2026 por Lucas Martins
+ 536| CT008  Validar intervalo da nota lançada
+ 537| Requisitos rastreados
+ 538| RF003, RN006
+ 539| Caso de uso relacionado
+ 540| UC03 Lançar Notas e Frequência
+ 541| Nível / Tipo
+ 542| Unitário / Funcional
+ 543| Técnica de projeto
+ 544| Análise de valor limite (intervalo de 0,0 a 10,0 com uma casa decimal)
+ 545| Prioridade
+ 546| Alta
+ 547| Pré-condições
+ 548| Classe ValidadorNota disponível para teste isolado
+ 549| Dados de teste
+ 550| Ver tabela de valores limite abaixo
+ 551| Passo
+ 552| Ação
+ 553| Resultado esperado
+ 554| 1
+ 555| Executar o método validar() com cada valor da tabela
+ 556| O retorno de cada chamada corresponde à coluna "Resultado esperado"
+ 557| Pós-condições
+ 558| Não se aplica
+ 559| Automatizado?
+ 560| Sim, JUnit (src/test/java/sga/nota/ValidadorNotaTest.java)
+ 561| Resultado da execução
+ 562| Reprovado em 09/10/2026 (DF002). Correção em andamento
+ 563| Valores limite da nota
+ 564| Valor
+ 565| Situação
+ 566| Resultado esperado
+ 567| -0,1
+ 568| Abaixo do limite inferior
+ 569| Rejeitada
+ 570| 0,0
+ 571| Limite inferior
+ 572| Aceita
+ 573| 0,1
+ 574| Acima do limite inferior
+ 575| Aceita
+ 576| 9,9
+ 577| Abaixo do limite superior
+ 578| Aceita
+ 579| 10,0
+ 580| Limite superior
+ 581| Aceita
+ 582| 10,1
+ 583| Acima do limite superior
+ 584| Rejeitada
+ 585| 7,25
+ 586| Mais de uma casa decimal
+ 587| Rejeitada
+ 588| CT009  Calcular a situação final do aluno na disciplina
+ 589| Requisitos rastreados
+ 590| RF003, RN007
+ 591| Caso de uso relacionado
+ 592| UC03 Lançar Notas e Frequência
+ 593| Nível / Tipo
+ 594| Unitário / Funcional
+ 595| Técnica de projeto
+ 596| Tabela de decisão (média final e frequência)
+ 597| Prioridade
+ 598| Alta
+ 599| Pré-condições
+ 600| Classe CalculadoraSituacao disponível para teste isolado
+ 601| Dados de teste
+ 602| Ver tabela de decisão abaixo
+ 603| Passo
+ 604| Ação
+ 605| Resultado esperado
+ 606| 1
+ 607| Executar o método calcular(media, frequencia) para cada regra da tabela
+ 608| A situação retornada corresponde à linha "Ação" da regra
+ 609| Pós-condições
+ 610| Não se aplica
+ 611| Automatizado?
+ 612| Sim, JUnit parametrizado (src/test/java/sga/nota/CalculadoraSituacaoTest.java)
+ 613| Resultado da execução
+ 614| Aprovado em 09/10/2026 por Lucas Martins
+ 615| Tabela de decisão da situação final (RN007)
+ 616| Condições e ações
+ 617| Regra 1
+ 618| Regra 2
+ 619| Regra 3
+ 620| Regra 4
+ 621| Média final maior ou igual a 6,0
+ 622| Sim
+ 623| Sim
+ 624| Não
+ 625| Não
+ 626| Frequência maior ou igual a 75%
+ 627| Sim
+ 628| Não
+ 629| Sim
+ 630| Não
+ 631| Dados usados (média; frequência)
+ 632| 6,0; 75%
+ 633| 8,5; 74%
+ 634| 5,9; 90%
+ 635| 4,0; 50%
+ 636| Ação: situação final
+ 637| Aprovado
+ 638| Reprovado por falta
+ 639| Reprovado por nota
+ 640| Reprovado por nota e falta
+ 641| CT010  Emitir histórico escolar dentro do tempo de resposta
+ 642| Requisitos rastreados
+ 643| RF004, RNF001
+ 644| Caso de uso relacionado
+ 645| UC04 Emitir Histórico Escolar
+ 646| Nível / Tipo
+ 647| Sistema / Funcional e Não funcional (desempenho)
+ 648| Técnica de projeto
+ 649| Teste baseado em cenário, com medição de tempo
+ 650| Prioridade
+ 651| Média
+ 652| Pré-condições
+ 653| Aluno RA 20241A0007 com 4 semestres concluídos e 24 disciplinas cursadas
+ 654| Dados de teste
+ 655| Aluno: RA 20241A0007
+ 656| Passo
+ 657| Ação
+ 658| Resultado esperado
+ 659| 1
+ 660| Autenticar como aluno e acessar "Histórico escolar"
+ 661| Tela de histórico é carregada
+ 662| 2
+ 663| Acionar "Gerar PDF" e medir o tempo até a exibição do arquivo
+ 664| PDF é exibido em no máximo 3 segundos (RNF001)
+ 665| 3
+ 666| Conferir o conteúdo do PDF
+ 667| Constam as 24 disciplinas, com semestre, nota final, frequência e situação de cada uma
+ 668| Pós-condições
+ 669| Nenhuma alteração na base de dados
+ 670| Automatizado?
+ 671| Parcial: tempo medido com Cypress (cypress/e2e/historico/tempo-emissao.cy.js); conferência do conteúdo feita manualmente
+ 672| Resultado da execução
+ 673| Aprovado em 11/10/2026 por Carlos Eduardo Nunes (tempo médio de 1,8 s em 5 execuções)
+ 674| 8. Matriz de rastreabilidade
+ 675| Requisito
+ 676| Descrição resumida
+ 677| Casos de teste
+ 678| Situação
+ 679| RF001
+ 680| Manter cadastro de alunos
+ 681| CT001, CT002
+ 682| Coberto
+ 683| RF002
+ 684| Realizar matrícula em disciplinas
+ 685| CT004, CT005, CT006, CT007
+ 686| Coberto
+ 687| RF003
+ 688| Lançar notas e frequência
+ 689| CT008, CT009
+ 690| Coberto
+ 691| RF004
+ 692| Emitir histórico escolar
+ 693| CT010
+ 694| Coberto
+ 695| RN001
+ 696| CPF válido e único
+ 697| CT001, CT002, CT003
+ 698| Coberto
+ 699| RN002
+ 700| Geração automática do RA
+ 701| CT001
+ 702| Coberto
+ 703| RN003
+ 704| Máximo de 7 disciplinas por semestre
+ 705| CT004, CT007
+ 706| Coberto
+ 707| RN004
+ 708| Pré-requisito cumprido
+ 709| CT004, CT005
+ 710| Coberto
+ 711| RN005
+ 712| Capacidade máxima de 40 alunos
+ 713| CT004, CT006
+ 714| Coberto
+ 715| RN006
+ 716| Nota entre 0,0 e 10,0
+ 717| CT008
+ 718| Coberto
+ 719| RN007
+ 720| Critério de aprovação
+ 721| CT009
+ 722| Coberto
+ 723| RN008
+ 724| Matrícula dentro do período
+ 725| CT004
+ 726| Parcial: falta cenário fora do período (ver R4)
+ 727| RNF001
+ 728| Histórico em até 3 segundos
+ 729| CT010
+ 730| Coberto
+ 731| RNF002
+ 732| Senhas com hash criptográfico
+ 733| Nenhum
+ 734| Lacuna: verificado por inspeção de código nesta sprint; caso de teste previsto para a Sprint 4
+ 735| RNF003
+ 736| Compatibilidade com Chrome e Firefox
+ 737| CT001, CT004
+ 738| Coberto
+ 739| 9. Cronograma e responsabilidades
+ 740| As estimativas utilizam a técnica PERT, com E = (O + 4M + P) / 6, em horas. O total estimado é de aproximadamente 20,5 horas, distribuídas entre 05/10 e 12/10/2026.
+ 741| Atividade
+ 742| Responsável
+ 743| O
+ 744| M
+ 745| P
+ 746| E (h)
+ 747| Prazo
+ 748| Projeto dos casos de teste
+ 749| Ana Beatriz Lima
+ 750| 2
+ 751| 4
+ 752| 8
+ 753| 4,3
+ 754| 06/10
+ 755| Preparação do ambiente e da massa de dados
+ 756| Carlos Eduardo Nunes
+ 757| 1
+ 758| 2
+ 759| 5
+ 760| 2,3
+ 761| 07/10
+ 762| Implementação dos testes automatizados
+ 763| Lucas Martins e Fernanda Oliveira
+ 764| 4
+ 765| 8
+ 766| 14
+ 767| 8,3
+ 768| 09/10
+ 769| Execução e registro de resultados
+ 770| Fernanda Oliveira
+ 771| 2
+ 772| 3
+ 773| 6
+ 774| 3,3
+ 775| 10/10
+ 776| Reteste e regressão
+ 777| Lucas Martins
+ 778| 1
+ 779| 2
+ 780| 4
+ 781| 2,2
+ 782| 12/10
+ 783| 10. Riscos e contingências
+ 784| ID
+ 785| Risco
+ 786| Probabilidade
+ 787| Impacto
+ 788| Ação de contingência
+ 789| R1
+ 790| Atraso na entrega da funcionalidade de lançamento de notas
+ 791| Média
+ 792| Alto
+ 793| Iniciar pelos testes unitários das classes de validação, que não dependem da interface
+ 794| R2
+ 795| Instabilidade do ambiente de homologação
+ 796| Baixa
+ 797| Médio
+ 798| Executar a suíte localmente com a mesma massa de dados
+ 799| R3
+ 800| Ausência de requisito de volume de usuários simultâneos no DRS
+ 801| Alta
+ 802| Médio
+ 803| Inconsistência comunicada ao professor em 05/10/2026; testes de carga fora do escopo até definição
+ 804| R4
+ 805| RN008 não informa se a matrícula já iniciada pode ser concluída após o fim do período
+ 806| Média
+ 807| Médio
+ 808| Ambiguidade comunicada ao professor; cenário fora do período será especificado após o esclarecimento
+ 809| 11. Gestão de defeitos
+ 810| 11.1 Classificação de severidade
+ 811| Severidade
+ 812| Critério
+ 813| Crítica
+ 814| Impede o uso de uma funcionalidade essencial, sem alternativa de contorno (ex.: aluno não consegue se matricular)
+ 815| Alta
+ 816| Funcionalidade com resultado incorreto, com alternativa de contorno
+ 817| Média
+ 818| Falha em regra secundária ou mensagem incorreta
+ 819| Baixa
+ 820| Problema cosmético (layout, texto, alinhamento)
+ 821| 11.2 Registro de defeitos
+ 822| Os defeitos são registrados no GitHub Issues do repositório do grupo com o rótulo "defeito" e referenciados pelo identificador abaixo.
+ 823| ID
+ 824| Caso de teste
+ 825| Descrição
+ 826| Severidade
+ 827| Situação
+ 828| DF001
+ 829| CT006
+ 830| Com 40 alunos matriculados, a turma aceitou a 41ª matrícula. A verificação usava "maior que 40" em vez de "maior ou igual a 40"
+ 831| Alta
+ 832| Corrigido e fechado em 11/10
+ 833| DF002
+ 834| CT008
+ 835| A nota 10,0 é rejeitada. O validador trata o limite superior como exclusivo
+ 836| Alta
+ 837| Aberto
+ 838| Como o DF002 é de severidade Alta e permanece aberto, o critério de saída ainda não foi atingido. A equipe registrou o bloqueio na revisão diária e a correção está prevista para 13/10/2026, seguida de reteste do CT008.
+ 839| 12. Entregáveis
+ 840| Este Plano de Testes, versão 1.1.
+ 841| Scripts de testes automatizados nas pastas src/test/java e cypress/e2e do repositório do grupo.
+ 842| Relatório de execução do GitHub Actions e vídeos gerados pelo Cypress para os casos E2E.
+ 843| Registro dos defeitos no GitHub Issues.

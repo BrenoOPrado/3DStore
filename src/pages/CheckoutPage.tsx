@@ -24,7 +24,7 @@ const blankAddress = (name: string, phone: string): Address => ({
 });
 
 export function CheckoutPage() {
-  const { detailed, count, clear } = useCart();
+  const { detailed, count, clear, buyDisabled } = useCart();
   const { user, myCoupons, addCard, placeOrder, quoteCheckout } = useStore();
   const navigate = useNavigate();
 
@@ -36,6 +36,7 @@ export function CheckoutPage() {
   const [couponCode, setCouponCode] = useState("");
   const [couponMsg, setCouponMsg] = useState<string | null>(null);
   const [cardSel, setCardSel] = useState<Record<string, string>>({});
+  const [cardCvv, setCardCvv] = useState<Record<string, string>>({});
   const [addingCard, setAddingCard] = useState(false);
   const [cardForm, setCardForm] = useState({ holder: "", number: "", expiry: "", cvv: "", brand: "Visa" });
   const [saveCard, setSaveCard] = useState(true);
@@ -96,7 +97,7 @@ export function CheckoutPage() {
   const paySum = Math.round(selectedPays.reduce((s, p) => s + p.amount, 0) * 100) / 100;
 
   if (!user) return <Navigate to="/entrar" replace state={{ from: "/checkout" }} />;
-  if (count === 0 && !placing) return <Navigate to="/carrinho" replace />;
+  if ((count === 0 || buyDisabled) && !placing) return <Navigate to="/carrinho" replace />;
 
   const applyCoupon = () => {
     const code = couponCode.trim().toUpperCase();
@@ -175,7 +176,7 @@ export function CheckoutPage() {
       saveAddress: !usingSaved && saveAddr,
       shippingId: shipping.id,
       couponCodes: couponSel,
-      payments: selectedPays,
+      payments: selectedPays.map((p) => ({ ...p, cvv: cardCvv[p.cardId] })),
       items: cartItems,
       newCard: pendingCard
         ? { ...pendingCard, save: false, amount: remaining > 0 ? remaining : 0 }
@@ -186,7 +187,7 @@ export function CheckoutPage() {
       setError(result.error);
       return;
     }
-    clear();
+    void clear();
     navigate("/pedido-confirmado");
   };
 
@@ -350,7 +351,8 @@ export function CheckoutPage() {
             Cartões
           </h2>
           <p className="muted">
-            Combine vários cartões. O valor restante após cupons é {formatPrice(total)}.
+            Combine vários cartões. O valor restante após cupons é {formatPrice(total)}. CVV 000 ou cartão
+            final 0002 simulam recusa da operadora.
           </p>
           {user.cards.length === 0 && (
             <p className="muted">Nenhum cartão salvo. Adicione um abaixo.</p>
@@ -372,6 +374,20 @@ export function CheckoutPage() {
                     onChange={(e) => setCardSel((p) => ({ ...p, [c.id]: maskMoney(e.target.value) }))}
                     onKeyDown={moneyKeyDown}
                     placeholder="0,00"
+                  />
+                </label>
+                <label className="field">
+                  <span className="field__label">CVV</span>
+                  <input
+                    className="field__control"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    data-testid={`pay-cvv-${c.last4}`}
+                    value={cardCvv[c.id] ?? ""}
+                    onChange={(e) =>
+                      setCardCvv((p) => ({ ...p, [c.id]: e.target.value.replace(/\D/g, "").slice(0, 4) }))
+                    }
+                    placeholder="123"
                   />
                 </label>
               </li>

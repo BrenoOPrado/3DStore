@@ -1,37 +1,38 @@
 import { getProduct, products as seedCatalog, type CategoryId, type Product } from "./products";
 import { calculateShipping, type ShippingOption } from "./checkout";
+import {
+  DEFAULT_LOCK_MS,
+  DRS_TRANSITIONS,
+  type CartLock,
+  type ExpiredCartItem,
+  type StoreNotification,
+} from "./orderFlow";
+
+export { DEFAULT_LOCK_MS };
 
 export type Role = "client" | "admin";
 export type CustomerStatus = "ativo" | "inativo";
 export type CouponType = "promocional" | "troca";
 
 export type OrderStatus =
-  | "EM_ABERTO"
   | "EM_PROCESSAMENTO"
-  | "PAGAMENTO_REALIZADO"
-  | "EM_TRANSITO"
+  | "APROVADA"
+  | "REPROVADA"
+  | "EM_TRANSPORTE"
   | "ENTREGUE"
-  | "CANCELADO"
-  | "TROCA_SOLICITADA"
-  | "TROCA_ACEITA"
-  | "TROCA_NEGADA"
-  | "ITEM_ENVIADO"
-  | "ITEM_RECEBIDO"
-  | "TROCA_PROCESSADA";
+  | "EM_TROCA"
+  | "TROCA_AUTORIZADA"
+  | "TROCADO";
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
-  EM_ABERTO: "Em aberto",
   EM_PROCESSAMENTO: "Em processamento",
-  PAGAMENTO_REALIZADO: "Pagamento realizado",
-  EM_TRANSITO: "Em trânsito",
+  APROVADA: "Aprovada",
+  REPROVADA: "Reprovada",
+  EM_TRANSPORTE: "Em transporte",
   ENTREGUE: "Entregue",
-  CANCELADO: "Cancelado",
-  TROCA_SOLICITADA: "Troca solicitada",
-  TROCA_ACEITA: "Troca aceita",
-  TROCA_NEGADA: "Troca negada",
-  ITEM_ENVIADO: "Item enviado",
-  ITEM_RECEBIDO: "Item recebido",
-  TROCA_PROCESSADA: "Troca processada",
+  EM_TROCA: "Em troca",
+  TROCA_AUTORIZADA: "Troca autorizada",
+  TROCADO: "Trocado",
 };
 
 export type AddressKind = "entrega" | "cobranca" | "ambos";
@@ -141,20 +142,16 @@ export type Order = {
   total: number;
   exchangeItemId?: string;
   exchangeQty?: number;
+  exchangeWhole?: boolean;
   exchangeCouponCode?: string;
   exchangeCouponValue?: number;
 };
 
 export const STATUS_ACTION: Partial<Record<OrderStatus, string>> = {
-  EM_PROCESSAMENTO: "Processar",
-  EM_TRANSITO: "Enviar",
-  ENTREGUE: "Recebi",
-  CANCELADO: "Cancelar",
-  TROCA_ACEITA: "Aceitar troca",
-  TROCA_NEGADA: "Negar troca",
-  ITEM_ENVIADO: "Despachar",
-  ITEM_RECEBIDO: "Receber item",
-  TROCA_PROCESSADA: "Processar troca",
+  EM_TRANSPORTE: "Despachar",
+  ENTREGUE: "Confirmar entrega",
+  TROCA_AUTORIZADA: "Autorizar troca",
+  TROCADO: "Confirmar recebimento da troca",
 };
 
 export const STORE_KEY = "3dstore-commerce-v2";
@@ -177,6 +174,11 @@ export type CommerceState = {
   catalog: Product[];
   logs: AuditLog[];
   sessionId: string | null;
+  locks: CartLock[];
+  expiredCart: ExpiredCartItem[];
+  notifications: StoreNotification[];
+  clockOffsetMs: number;
+  lockTtlMs: number;
 };
 
 export function uid(prefix = "id") {
@@ -256,6 +258,9 @@ const STOCK_BY_ID: Record<string, number> = {
   "gancho-trex": 8,
   "porta-alho": 8,
   "escorredor-elefante": 1,
+  "dragao-articulado": 12,
+  "chaveiro-flexi-dino": 40,
+  "busto-guerreiro": 10,
 };
 
 export function cloneCatalog(): Product[] {
@@ -263,6 +268,7 @@ export function cloneCatalog(): Product[] {
     ...p,
     colors: [...p.colors],
     stock: p.stock ?? STOCK_BY_ID[p.id] ?? 20,
+    status: p.status ?? "ativo",
   }));
 }
 
@@ -293,77 +299,46 @@ export function cardBrand(number: string) {
 }
 
 export function customerRanking(orders: { customerId: string; status: OrderStatus }[], customerId: string) {
-  return orders.filter(
-    (o) =>
-      o.customerId === customerId &&
-      o.status !== "CANCELADO" &&
-      o.status !== "EM_ABERTO"
-  ).length;
+  return orders.filter((o) => o.customerId === customerId && o.status !== "REPROVADA").length;
 }
 
 export function isPickup(order: Pick<Order, "shipping">) {
   return order.shipping.id === "retirada";
 }
 
-export function adminTransitions(status: OrderStatus, order?: Pick<Order, "shipping">): OrderStatus[] {
-  switch (status) {
-    case "EM_ABERTO":
-      return ["EM_PROCESSAMENTO"];
-    case "PAGAMENTO_REALIZADO":
-      return order && isPickup(order) ? [] : ["EM_TRANSITO"];
-    case "TROCA_SOLICITADA":
-      return ["TROCA_ACEITA", "TROCA_NEGADA"];
-    case "ITEM_ENVIADO":
-      return ["ITEM_RECEBIDO"];
-    case "ITEM_RECEBIDO":
-      return ["TROCA_PROCESSADA"];
-    default:
-      return [];
-  }
+export function adminTransitions(status: OrderStatus, _order?: Pick<Order, "shipping">): OrderStatus[] {
+  return DRS_TRANSITIONS[status] ? [...DRS_TRANSITIONS[status]!] : [];
 }
 
-export function adminWaitingMessage(status: OrderStatus, order?: Pick<Order, "shipping">): string | null {
+export function adminWaitingMessage(status: OrderStatus, _order?: Pick<Order, "shipping">): string | null {
   if (status === "EM_PROCESSAMENTO") {
-    return "O sistema está verificando se o pagamento foi realizado.";
+    return "O sistema está validando o pagamento.";
   }
-  if (status === "PAGAMENTO_REALIZADO" && order && isPickup(order)) {
-    return "Aguardando o cliente retirar no ateliê.";
-  }
-  if (status === "EM_TRANSITO") return "Aguardando o cliente confirmar o recebimento.";
+  if (status === "APROVADA") return "Selecione a venda para despacho (EM TRANSPORTE).";
+  if (status === "EM_TRANSPORTE") return "Confirme a entrega para marcar como ENTREGUE.";
+  if (status === "EM_TROCA") return "Visualize e autorize a troca.";
+  if (status === "TROCA_AUTORIZADA") return "Confirme o recebimento dos itens da troca.";
   return null;
 }
 
-export function paymentIsConfirmed(order: Pick<Order, "payments" | "total">) {
-  const paid = Math.round(order.payments.reduce((s, p) => s + p.amount, 0) * 100) / 100;
-  if (order.total <= 0) return true;
-  return paid >= order.total - 0.05;
-}
-
-export function settlePaymentIfDue(order: Order, at = new Date().toISOString()): Order {
-  if (order.status !== "EM_PROCESSAMENTO") return order;
-  if (!paymentIsConfirmed(order)) return order;
-  return {
-    ...order,
-    status: "PAGAMENTO_REALIZADO",
-    history: [...order.history, { status: "PAGAMENTO_REALIZADO", at, by: "sistema" }],
-  };
-}
-
-export function canCancel(status: OrderStatus) {
-  return status === "EM_ABERTO" || status === "EM_PROCESSAMENTO";
-}
-
-export function canConfirmReceipt(status: OrderStatus, order?: Pick<Order, "shipping">) {
-  if (status === "EM_TRANSITO") return true;
-  return status === "PAGAMENTO_REALIZADO" && Boolean(order && isPickup(order));
-}
-
 export function canRequestExchange(status: OrderStatus) {
-  return status === "ENTREGUE" || status === "TROCA_NEGADA";
+  return status === "ENTREGUE";
 }
 
-export function canDispatchItem(status: OrderStatus) {
-  return status === "TROCA_ACEITA";
+export function migrateOrderStatus(status: string): OrderStatus {
+  const map: Record<string, OrderStatus> = {
+    EM_ABERTO: "EM_PROCESSAMENTO",
+    PAGAMENTO_REALIZADO: "APROVADA",
+    EM_TRANSITO: "EM_TRANSPORTE",
+    CANCELADO: "REPROVADA",
+    TROCA_SOLICITADA: "EM_TROCA",
+    TROCA_ACEITA: "TROCA_AUTORIZADA",
+    TROCA_NEGADA: "ENTREGUE",
+    ITEM_ENVIADO: "TROCA_AUTORIZADA",
+    ITEM_RECEBIDO: "TROCA_AUTORIZADA",
+    TROCA_PROCESSADA: "TROCADO",
+  };
+  return (map[status] ?? status) as OrderStatus;
 }
 
 function event(status: OrderStatus, at: string, by: StatusEvent["by"]): StatusEvent {
@@ -649,6 +624,23 @@ export function seedState(): CommerceState {
   const sedex = calculateShipping("01310100")[1];
   const pacRj = calculateShipping("22041080")[0];
 
+  const paidFlow = (
+    start: string,
+    processAt: string,
+    approveAt: string,
+    shipAt?: string,
+    deliverAt?: string
+  ): StatusEvent[] => {
+    const hist: StatusEvent[] = [
+      event("EM_PROCESSAMENTO", start, "cliente"),
+      event("APROVADA", approveAt, "sistema"),
+    ];
+    if (shipAt) hist.push(event("EM_TRANSPORTE", shipAt, "admin"));
+    if (deliverAt) hist.push(event("ENTREGUE", deliverAt, "admin"));
+    void processAt;
+    return hist;
+  };
+
   const orders: Order[] = [
     makeOrder({
       id: "3DS-100001",
@@ -662,13 +654,13 @@ export function seedState(): CommerceState {
       shipping: pac,
       coupons: [],
       payments: [{ cardId: "card-ana-1", last4: "1111", brand: "Visa", amount: 82.8 }],
-      history: [
-        event("EM_ABERTO", "2026-03-12T14:20:00.000Z", "cliente"),
-        event("EM_PROCESSAMENTO", "2026-03-12T16:00:00.000Z", "admin"),
-        event("PAGAMENTO_REALIZADO", "2026-03-12T16:10:00.000Z", "sistema"),
-        event("EM_TRANSITO", "2026-03-13T09:00:00.000Z", "admin"),
-        event("ENTREGUE", "2026-03-18T11:30:00.000Z", "cliente"),
-      ],
+      history: paidFlow(
+        "2026-03-12T14:20:00.000Z",
+        "2026-03-12T14:20:01.000Z",
+        "2026-03-12T14:20:02.000Z",
+        "2026-03-13T09:00:00.000Z",
+        "2026-03-18T11:30:00.000Z"
+      ),
     }),
     makeOrder({
       id: "3DS-100002",
@@ -676,7 +668,7 @@ export function seedState(): CommerceState {
       customerEmail: "ana.souza@email.com",
       customerName: "Ana Souza",
       createdAt: "2026-05-04T10:00:00.000Z",
-      status: "EM_TRANSITO",
+      status: "APROVADA",
       items: [
         itemFrom("filtro-dino", "Azul petróleo", 1, "oi-2"),
         itemFrom("porta-alho", "Verde", 1, "oi-3"),
@@ -685,12 +677,7 @@ export function seedState(): CommerceState {
       shipping: sedex,
       coupons: [{ code: "PRINT10", type: "promocional", value: 10 }],
       payments: [{ cardId: "card-ana-1", last4: "1111", brand: "Visa", amount: 147.7 }],
-      history: [
-        event("EM_ABERTO", "2026-05-04T10:00:00.000Z", "cliente"),
-        event("EM_PROCESSAMENTO", "2026-05-04T11:00:00.000Z", "admin"),
-        event("PAGAMENTO_REALIZADO", "2026-05-04T11:20:00.000Z", "sistema"),
-        event("EM_TRANSITO", "2026-05-05T08:40:00.000Z", "admin"),
-      ],
+      history: paidFlow("2026-05-04T10:00:00.000Z", "2026-05-04T10:00:01.000Z", "2026-05-04T10:00:02.000Z"),
     }),
     makeOrder({
       id: "3DS-100003",
@@ -698,7 +685,7 @@ export function seedState(): CommerceState {
       customerEmail: "ana.souza@email.com",
       customerName: "Ana Souza",
       createdAt: "2026-07-22T19:10:00.000Z",
-      status: "EM_ABERTO",
+      status: "EM_PROCESSAMENTO",
       items: [itemFrom("luminaria-estrela", "Grafite", 1, "oi-4")],
       address: anaHome,
       shipping: pac,
@@ -714,7 +701,7 @@ export function seedState(): CommerceState {
       customerEmail: "carla.mendes@email.com",
       customerName: "Carla Mendes",
       createdAt: "2026-04-18T13:00:00.000Z",
-      status: "TROCA_SOLICITADA",
+      status: "EM_TROCA",
       items: [itemFrom("suporte-headset", "Azul e rosa", 1, "oi-5")],
       address: carlaHome,
       shipping: pac,
@@ -723,12 +710,14 @@ export function seedState(): CommerceState {
       exchangeItemId: "oi-5",
       exchangeQty: 1,
       history: [
-        event("EM_ABERTO", "2026-04-18T13:00:00.000Z", "cliente"),
-        event("EM_PROCESSAMENTO", "2026-04-18T15:00:00.000Z", "admin"),
-        event("PAGAMENTO_REALIZADO", "2026-04-18T15:10:00.000Z", "sistema"),
-        event("EM_TRANSITO", "2026-04-19T09:00:00.000Z", "admin"),
-        event("ENTREGUE", "2026-04-25T18:00:00.000Z", "cliente"),
-        event("TROCA_SOLICITADA", "2026-04-28T12:00:00.000Z", "cliente"),
+        ...paidFlow(
+          "2026-04-18T13:00:00.000Z",
+          "2026-04-18T13:00:01.000Z",
+          "2026-04-18T13:00:02.000Z",
+          "2026-04-19T09:00:00.000Z",
+          "2026-04-25T18:00:00.000Z"
+        ),
+        event("EM_TROCA", "2026-04-28T12:00:00.000Z", "cliente"),
       ],
     }),
     makeOrder({
@@ -737,7 +726,7 @@ export function seedState(): CommerceState {
       customerEmail: "carla.mendes@email.com",
       customerName: "Carla Mendes",
       createdAt: "2026-06-09T16:40:00.000Z",
-      status: "TROCA_ACEITA",
+      status: "TROCA_AUTORIZADA",
       items: [itemFrom("vasos-dino", "Verde lima", 1, "oi-6")],
       address: carlaHome,
       shipping: pac,
@@ -746,13 +735,15 @@ export function seedState(): CommerceState {
       exchangeItemId: "oi-6",
       exchangeQty: 1,
       history: [
-        event("EM_ABERTO", "2026-06-09T16:40:00.000Z", "cliente"),
-        event("EM_PROCESSAMENTO", "2026-06-09T17:00:00.000Z", "admin"),
-        event("PAGAMENTO_REALIZADO", "2026-06-09T17:05:00.000Z", "sistema"),
-        event("EM_TRANSITO", "2026-06-10T08:00:00.000Z", "admin"),
-        event("ENTREGUE", "2026-06-16T10:00:00.000Z", "admin"),
-        event("TROCA_SOLICITADA", "2026-06-18T09:00:00.000Z", "cliente"),
-        event("TROCA_ACEITA", "2026-06-18T14:00:00.000Z", "admin"),
+        ...paidFlow(
+          "2026-06-09T16:40:00.000Z",
+          "2026-06-09T16:40:01.000Z",
+          "2026-06-09T16:40:02.000Z",
+          "2026-06-10T08:00:00.000Z",
+          "2026-06-16T10:00:00.000Z"
+        ),
+        event("EM_TROCA", "2026-06-18T09:00:00.000Z", "cliente"),
+        event("TROCA_AUTORIZADA", "2026-06-18T14:00:00.000Z", "admin"),
       ],
     }),
     makeOrder({
@@ -761,24 +752,19 @@ export function seedState(): CommerceState {
       customerEmail: "carla.mendes@email.com",
       customerName: "Carla Mendes",
       createdAt: "2026-02-08T11:00:00.000Z",
-      status: "ITEM_ENVIADO",
+      status: "ENTREGUE",
       items: [itemFrom("gancho-trex", "Verde", 2, "oi-7")],
       address: carlaHome,
       shipping: pac,
       coupons: [],
       payments: [{ cardId: "card-carla-1", last4: "1881", brand: "Visa", amount: 82.7 }],
-      exchangeItemId: "oi-7",
-      exchangeQty: 1,
-      history: [
-        event("EM_ABERTO", "2026-02-08T11:00:00.000Z", "cliente"),
-        event("EM_PROCESSAMENTO", "2026-02-08T12:00:00.000Z", "admin"),
-        event("PAGAMENTO_REALIZADO", "2026-02-08T12:10:00.000Z", "sistema"),
-        event("EM_TRANSITO", "2026-02-09T09:00:00.000Z", "admin"),
-        event("ENTREGUE", "2026-02-15T11:00:00.000Z", "cliente"),
-        event("TROCA_SOLICITADA", "2026-02-16T10:00:00.000Z", "cliente"),
-        event("TROCA_ACEITA", "2026-02-16T15:00:00.000Z", "admin"),
-        event("ITEM_ENVIADO", "2026-02-17T09:30:00.000Z", "cliente"),
-      ],
+      history: paidFlow(
+        "2026-02-08T11:00:00.000Z",
+        "2026-02-08T11:00:01.000Z",
+        "2026-02-08T11:00:02.000Z",
+        "2026-02-09T09:00:00.000Z",
+        "2026-02-15T11:00:00.000Z"
+      ),
     }),
     makeOrder({
       id: "3DS-100007",
@@ -786,7 +772,7 @@ export function seedState(): CommerceState {
       customerEmail: "ana.souza@email.com",
       customerName: "Ana Souza",
       createdAt: "2026-01-20T09:00:00.000Z",
-      status: "ITEM_RECEBIDO",
+      status: "TROCADO",
       items: [itemFrom("luminaria-cao", "Areia", 1, "oi-8")],
       address: anaHome,
       shipping: pac,
@@ -794,16 +780,20 @@ export function seedState(): CommerceState {
       payments: [{ cardId: "card-ana-1", last4: "1111", brand: "Visa", amount: 132.8 }],
       exchangeItemId: "oi-8",
       exchangeQty: 1,
+      exchangeWhole: false,
+      exchangeCouponCode: "TROCA-ANA-64",
+      exchangeCouponValue: 15,
       history: [
-        event("EM_ABERTO", "2026-01-20T09:00:00.000Z", "cliente"),
-        event("EM_PROCESSAMENTO", "2026-01-20T10:00:00.000Z", "admin"),
-        event("PAGAMENTO_REALIZADO", "2026-01-20T10:05:00.000Z", "sistema"),
-        event("EM_TRANSITO", "2026-01-21T08:00:00.000Z", "admin"),
-        event("ENTREGUE", "2026-01-27T14:00:00.000Z", "cliente"),
-        event("TROCA_SOLICITADA", "2026-01-28T09:00:00.000Z", "cliente"),
-        event("TROCA_ACEITA", "2026-01-28T11:00:00.000Z", "admin"),
-        event("ITEM_ENVIADO", "2026-01-29T10:00:00.000Z", "cliente"),
-        event("ITEM_RECEBIDO", "2026-02-02T16:00:00.000Z", "admin"),
+        ...paidFlow(
+          "2026-01-20T09:00:00.000Z",
+          "2026-01-20T09:00:01.000Z",
+          "2026-01-20T09:00:02.000Z",
+          "2026-01-21T08:00:00.000Z",
+          "2026-01-27T14:00:00.000Z"
+        ),
+        event("EM_TROCA", "2026-01-28T09:00:00.000Z", "cliente"),
+        event("TROCA_AUTORIZADA", "2026-01-28T11:00:00.000Z", "admin"),
+        event("TROCADO", "2026-02-02T16:00:00.000Z", "admin"),
       ],
     }),
     makeOrder({
@@ -812,17 +802,13 @@ export function seedState(): CommerceState {
       customerEmail: "bruno.lima@email.com",
       customerName: "Bruno Lima",
       createdAt: "2026-08-02T15:30:00.000Z",
-      status: "PAGAMENTO_REALIZADO",
+      status: "APROVADA",
       items: [itemFrom("aquario-r2d2", "Branco e azul", 1, "oi-9")],
       address: brunoHome,
       shipping: pacRj,
       coupons: [],
       payments: [{ cardId: "card-ana-1", last4: "0000", brand: "Visa", amount: 278.8 }],
-      history: [
-        event("EM_ABERTO", "2026-08-02T15:30:00.000Z", "cliente"),
-        event("EM_PROCESSAMENTO", "2026-08-02T17:00:00.000Z", "admin"),
-        event("PAGAMENTO_REALIZADO", "2026-08-02T17:00:05.000Z", "sistema"),
-      ],
+      history: paidFlow("2026-08-02T15:30:00.000Z", "2026-08-02T15:30:01.000Z", "2026-08-02T15:30:02.000Z"),
     }),
     makeOrder({
       id: "3DS-100009",
@@ -830,17 +816,13 @@ export function seedState(): CommerceState {
       customerEmail: "carla.mendes@email.com",
       customerName: "Carla Mendes",
       createdAt: "2026-08-14T12:00:00.000Z",
-      status: "PAGAMENTO_REALIZADO",
+      status: "APROVADA",
       items: [itemFrom("porta-chaves", "Cinza, azul, amarelo e vermelho", 1, "oi-10")],
       address: carlaHome,
       shipping: pac,
       coupons: [{ code: "ATELIE15", type: "promocional", value: 15 }],
       payments: [{ cardId: "card-carla-1", last4: "1881", brand: "Visa", amount: 37.8 }],
-      history: [
-        event("EM_ABERTO", "2026-08-14T12:00:00.000Z", "cliente"),
-        event("EM_PROCESSAMENTO", "2026-08-14T13:00:00.000Z", "admin"),
-        event("PAGAMENTO_REALIZADO", "2026-08-14T13:08:00.000Z", "sistema"),
-      ],
+      history: paidFlow("2026-08-14T12:00:00.000Z", "2026-08-14T12:00:01.000Z", "2026-08-14T12:00:02.000Z"),
     }),
     makeOrder({
       id: "3DS-100010",
@@ -848,20 +830,92 @@ export function seedState(): CommerceState {
       customerEmail: "ana.souza@email.com",
       customerName: "Ana Souza",
       createdAt: "2026-08-21T18:00:00.000Z",
-      status: "CANCELADO",
+      status: "REPROVADA",
       items: [itemFrom("escorredor-elefante", "Cinza", 1, "oi-11")],
       address: anaHome,
       shipping: pac,
       coupons: [],
-      payments: [{ cardId: "card-ana-2", last4: "4444", brand: "Mastercard", amount: 60.8 }],
+      payments: [{ cardId: "card-ana-3", last4: "0002", brand: "Visa", amount: 60.8 }],
       history: [
-        event("EM_ABERTO", "2026-08-21T18:00:00.000Z", "cliente"),
-        event("CANCELADO", "2026-08-21T18:20:00.000Z", "cliente"),
+        event("EM_PROCESSAMENTO", "2026-08-21T18:00:00.000Z", "cliente"),
+        event("REPROVADA", "2026-08-21T18:00:02.000Z", "sistema"),
       ],
+    }),
+    makeOrder({
+      id: "3DS-100011",
+      customerId: "cust-ana",
+      customerEmail: "ana.souza@email.com",
+      customerName: "Ana Souza",
+      createdAt: "2026-05-18T11:00:00.000Z",
+      status: "ENTREGUE",
+      items: [itemFrom("filtro-dino", "Verde", 1, "oi-12")],
+      address: anaHome,
+      shipping: pac,
+      coupons: [],
+      payments: [{ cardId: "card-ana-1", last4: "1111", brand: "Visa", amount: 102.8 }],
+      history: paidFlow(
+        "2026-05-18T11:00:00.000Z",
+        "2026-05-18T11:00:01.000Z",
+        "2026-05-18T11:00:02.000Z",
+        "2026-05-19T09:00:00.000Z",
+        "2026-05-25T16:00:00.000Z"
+      ),
+    }),
+    makeOrder({
+      id: "3DS-100012",
+      customerId: "cust-carla",
+      customerEmail: "carla.mendes@email.com",
+      customerName: "Carla Mendes",
+      createdAt: "2026-06-22T14:00:00.000Z",
+      status: "ENTREGUE",
+      items: [itemFrom("luminaria-estrela", "Grafite", 1, "oi-13")],
+      address: carlaHome,
+      shipping: pac,
+      coupons: [],
+      payments: [{ cardId: "card-carla-1", last4: "1881", brand: "Visa", amount: 172.8 }],
+      history: paidFlow(
+        "2026-06-22T14:00:00.000Z",
+        "2026-06-22T14:00:01.000Z",
+        "2026-06-22T14:00:02.000Z",
+        "2026-06-23T09:00:00.000Z",
+        "2026-06-28T12:00:00.000Z"
+      ),
+    }),
+    makeOrder({
+      id: "3DS-100013",
+      customerId: "cust-ana",
+      customerEmail: "ana.souza@email.com",
+      customerName: "Ana Souza",
+      createdAt: "2026-01-08T10:00:00.000Z",
+      status: "ENTREGUE",
+      items: [itemFrom("vasos-dino", "Turquesa", 1, "oi-14")],
+      address: anaHome,
+      shipping: pac,
+      coupons: [],
+      payments: [{ cardId: "card-ana-1", last4: "1111", brand: "Visa", amount: 92.8 }],
+      history: paidFlow(
+        "2026-01-08T10:00:00.000Z",
+        "2026-01-08T10:00:01.000Z",
+        "2026-01-08T10:00:02.000Z",
+        "2026-01-09T09:00:00.000Z",
+        "2026-01-14T11:00:00.000Z"
+      ),
     }),
   ];
 
-  return { customers, orders, coupons, catalog: cloneCatalog(), logs: [], sessionId: null };
+  return {
+    customers,
+    orders,
+    coupons,
+    catalog: cloneCatalog(),
+    logs: [],
+    sessionId: null,
+    locks: [],
+    expiredCart: [],
+    notifications: [],
+    clockOffsetMs: 0,
+    lockTtlMs: DEFAULT_LOCK_MS,
+  };
 }
 
 export function loadState(): CommerceState {
@@ -872,10 +926,16 @@ export function loadState(): CommerceState {
     if (!parsed.customers?.length) return seedState();
     parsed.customers = parsed.customers.map((c) => migrateCustomer(c));
     if (!parsed.catalog?.length) parsed.catalog = cloneCatalog();
-    const orders = (parsed.orders ?? []).map((o) => settlePaymentIfDue(o));
-    const changed = orders.some((o, i) => o.status !== parsed.orders[i]?.status);
-    parsed.orders = orders;
-    if (changed) saveState(parsed);
+    parsed.orders = (parsed.orders ?? []).map((o) => ({
+      ...o,
+      status: migrateOrderStatus(o.status),
+      history: (o.history ?? []).map((h) => ({ ...h, status: migrateOrderStatus(h.status) })),
+    }));
+    parsed.locks = parsed.locks ?? [];
+    parsed.expiredCart = parsed.expiredCart ?? [];
+    parsed.notifications = parsed.notifications ?? [];
+    parsed.clockOffsetMs = parsed.clockOffsetMs ?? 0;
+    parsed.lockTtlMs = parsed.lockTtlMs ?? DEFAULT_LOCK_MS;
     parsed.sessionId = readSessionId();
     return parsed;
   } catch {
@@ -918,65 +978,5 @@ export function availableCoupons(coupons: Coupon[], email: string) {
   });
 }
 
-export type ChartPoint = { label: string; total: number; count: number };
-export type CategoryBar = { id: CategoryId; label: string; total: number };
-
-export function chartFromOrders(
-  orders: Order[],
-  categoryLabels: { id: CategoryId; label: string }[],
-  categoryIds: CategoryId[] = []
-): { months: ChartPoint[]; categories: CategoryBar[] } {
-  const paid = new Set<OrderStatus>([
-    "PAGAMENTO_REALIZADO",
-    "EM_TRANSITO",
-    "ENTREGUE",
-    "TROCA_SOLICITADA",
-    "TROCA_ACEITA",
-    "TROCA_NEGADA",
-    "ITEM_ENVIADO",
-    "ITEM_RECEBIDO",
-    "TROCA_PROCESSADA",
-  ]);
-  const relevant = orders.filter((o) => paid.has(o.status));
-  const catFilter = categoryIds.length > 0 ? new Set(categoryIds) : null;
-  const matchingItems = (o: Order) =>
-    o.items.filter((item) => !catFilter || catFilter.has(item.category));
-  const amountOf = (o: Order) => {
-    const items = matchingItems(o);
-    if (items.length === 0) return 0;
-    if (!catFilter) return o.total;
-    return items.reduce((sum, item) => sum + item.line, 0);
-  };
-
-  const monthMap = new Map<string, ChartPoint>();
-  for (const o of relevant) {
-    const amount = amountOf(o);
-    if (amount <= 0) continue;
-    const d = new Date(o.createdAt);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
-    const cur = monthMap.get(key) ?? { label, total: 0, count: 0 };
-    cur.total += amount;
-    cur.count += 1;
-    monthMap.set(key, cur);
-  }
-  const months = [...monthMap.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([, v]) => v);
-
-  const catMap = new Map<CategoryId, number>();
-  for (const o of relevant) {
-    for (const item of matchingItems(o)) {
-      catMap.set(item.category, (catMap.get(item.category) ?? 0) + item.line);
-    }
-  }
-  const categories = categoryLabels
-    .filter((c) => !catFilter || catFilter.has(c.id))
-    .map((c) => ({
-      id: c.id,
-      label: c.label,
-      total: catMap.get(c.id) ?? 0,
-    }));
-
-  return { months, categories };
-}
+export type ChartPoint = { label: string; total: number; count?: number };
+export type CategoryBar = { id: CategoryId; label: string; total: number; color?: string; points?: number[] };

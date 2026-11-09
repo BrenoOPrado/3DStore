@@ -27,6 +27,7 @@ server.use((req, res, next) => {
     if (!res.headersSent) res.setHeader("X-Response-Time", `${Date.now() - start}ms`);
     return originalJson(body);
   }) as typeof res.json;
+  app.touchCart();
   next();
 });
 
@@ -147,6 +148,54 @@ server.post("/api/account/cards/:id/preferred", (req, res) => {
   sendResult(req, res, app.setPreferredCard(customerIdOf(req), idParam(req)));
 });
 
+server.get("/api/cart", (req, res) => {
+  sendResult(req, res, app.getCart(customerIdOf(req)));
+});
+
+server.post("/api/cart/items", (req, res) => {
+  sendResult(
+    req,
+    res,
+    app.addToCart(customerIdOf(req), {
+      productId: String(req.body?.productId ?? ""),
+      color: String(req.body?.color ?? ""),
+      quantity: Number(req.body?.quantity ?? 1),
+    })
+  );
+});
+
+server.patch("/api/cart/items", (req, res) => {
+  sendResult(
+    req,
+    res,
+    app.setCartQty(customerIdOf(req), {
+      productId: String(req.body?.productId ?? ""),
+      color: String(req.body?.color ?? ""),
+      quantity: Number(req.body?.quantity ?? 0),
+    })
+  );
+});
+
+server.delete("/api/cart/items", (req, res) => {
+  sendResult(
+    req,
+    res,
+    app.removeCartItem(customerIdOf(req), String(req.body?.productId ?? ""), String(req.body?.color ?? ""))
+  );
+});
+
+server.post("/api/cart/clear", (req, res) => {
+  sendResult(req, res, app.clearCart(customerIdOf(req)));
+});
+
+server.post("/api/cart/dismiss-expired", (req, res) => {
+  sendResult(req, res, app.dismissExpiredCart(customerIdOf(req)));
+});
+
+server.post("/api/notifications/:id/read", (req, res) => {
+  sendResult(req, res, app.markNotificationRead(customerIdOf(req), idParam(req)));
+});
+
 server.post("/api/checkout/quote", (req, res) => {
   const result = app.quoteCheckout(customerIdOf(req), {
     items: req.body?.items ?? [],
@@ -171,24 +220,18 @@ server.post("/api/orders", (req, res) => {
   res.json({ ...result, ...app.snapshot(customerIdOf(req), result.id) });
 });
 
-server.post("/api/orders/:id/cancel", (req, res) => {
-  sendResult(req, res, app.cancelOrder(customerIdOf(req), idParam(req)));
-});
-
-server.post("/api/orders/:id/confirm-receipt", (req, res) => {
-  sendResult(req, res, app.confirmReceipt(customerIdOf(req), idParam(req)));
-});
-
 server.post("/api/orders/:id/exchange", (req, res) => {
   sendResult(
     req,
     res,
-    app.requestExchange(customerIdOf(req), idParam(req), String(req.body?.itemId ?? ""), Number(req.body?.qty ?? 0))
+    app.requestExchange(
+      customerIdOf(req),
+      idParam(req),
+      String(req.body?.itemId ?? ""),
+      Number(req.body?.qty ?? 0),
+      Boolean(req.body?.whole)
+    )
   );
-});
-
-server.post("/api/orders/:id/dispatch-item", (req, res) => {
-  sendResult(req, res, app.dispatchExchangeItem(customerIdOf(req), idParam(req)));
 });
 
 server.patch("/api/admin/customers/:id", (req, res) => {
@@ -221,11 +264,21 @@ server.post("/api/admin/products", (req, res) => {
 });
 
 server.put("/api/admin/products/:id", (req, res) => {
-  sendResult(req, res, app.updateProduct(customerIdOf(req), { ...(req.body as Product), id: idParam(req) }));
+  const body = (req.body ?? {}) as Product & { priceConfirmations?: number };
+  const { priceConfirmations, ...rest } = body;
+  sendResult(
+    req,
+    res,
+    app.updateProduct(customerIdOf(req), { ...rest, id: idParam(req) }, { priceConfirmations })
+  );
 });
 
 server.delete("/api/admin/products/:id", (req, res) => {
   sendResult(req, res, app.deleteProduct(customerIdOf(req), idParam(req)));
+});
+
+server.post("/api/admin/products/:id/restore", (req, res) => {
+  sendResult(req, res, app.restoreProduct(customerIdOf(req), idParam(req)));
 });
 
 server.post("/api/admin/coupons", (req, res) => {
@@ -243,12 +296,22 @@ server.get("/api/admin/logs", (req, res) => {
 server.get("/api/admin/chart", (req, res) => {
   const raw = String(req.query.categories ?? "");
   const categoryIds = raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
-  const result = app.adminChart(customerIdOf(req), categoryIds);
+  const start = String(req.query.start ?? "");
+  const end = String(req.query.end ?? "");
+  const result = app.adminChart(customerIdOf(req), categoryIds, start || undefined, end || undefined);
   if (result && "error" in result) {
     sendResult(req, res, result);
     return;
   }
   res.json(result);
+});
+
+server.post("/api/dev/expire-locks", (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    res.status(404).json({ error: "Não encontrado." });
+    return;
+  }
+  sendResult(req, res, app.expireCustomerLocks(customerIdOf(req)));
 });
 
 server.post("/api/dev/reset", (_req, res) => {

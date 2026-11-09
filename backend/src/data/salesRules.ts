@@ -1,5 +1,5 @@
 import type { Coupon } from "./commerce";
-import type { Product } from "./products";
+import { isListedProduct, type Product } from "./products";
 import { calculateShipping, type ShippingOption } from "./checkout";
 
 export const FREIGHT_PER_UNIT = 4.9;
@@ -110,7 +110,7 @@ export function validateCartStock(
   }
   for (const [productId, qty] of byProduct) {
     const product = catalog.find((item) => item.id === productId);
-    if (!product) return "Produto indisponível.";
+    if (!product || !isListedProduct(product)) return "Produto indisponível.";
     const stock = availableStock(product);
     if (stock <= 0) return `${product.name} está indisponível em estoque.`;
     if (qty > stock) return `Quantidade de ${product.name} acima do estoque (${stock}).`;

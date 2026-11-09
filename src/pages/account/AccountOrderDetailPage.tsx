@@ -1,23 +1,12 @@
 import { useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { formatPrice } from "../../data/products";
-import {
-  STATUS_ACTION,
-  STATUS_LABEL,
-  formatAddress,
-  formatCouponValue,
-} from "../../data/commerce";
+import { STATUS_LABEL, formatAddress, formatCouponValue } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
 
 export function AccountOrderDetailPage() {
   const { id } = useParams();
-  const {
-    myOrders,
-    cancelOrder,
-    confirmReceipt,
-    requestExchange,
-    dispatchExchangeItem,
-  } = useStore();
+  const { myOrders, requestExchange, notifications, markNotificationRead } = useStore();
   const order = myOrders.find((o) => o.id === id);
   const [itemId, setItemId] = useState(order?.items[0]?.id ?? "");
   const [qty, setQty] = useState(1);
@@ -25,6 +14,7 @@ export function AccountOrderDetailPage() {
 
   if (!order) return <Navigate to="/conta/pedidos" replace />;
 
+  const notes = notifications.filter((n) => n.orderId === order.id);
   const run = async (fn: () => Promise<string | null>) => {
     const err = await fn();
     setMsg(err ?? "Atualizado.");
@@ -45,6 +35,17 @@ export function AccountOrderDetailPage() {
         </span>
       </div>
 
+      {notes.map((n) => (
+        <p key={n.id} className="form-ok" data-testid="exchange-notification">
+          {n.title}: {n.body}
+          {!n.read && (
+            <button type="button" className="ghost-link" onClick={() => void markNotificationRead(n.id)}>
+              Marcar como lida
+            </button>
+          )}
+        </p>
+      ))}
+
       <ul className="stack-list">
         {order.items.map((item) => (
           <li key={item.id} className="checkout-item">
@@ -53,7 +54,7 @@ export function AccountOrderDetailPage() {
               <p>{item.name}</p>
               <p>
                 {item.color} · {item.quantity}x
-                {order.exchangeItemId === item.id ? " · em troca" : ""}
+                {order.exchangeItemId === item.id || order.exchangeWhole ? " · em troca" : ""}
               </p>
             </div>
             <p>{formatPrice(item.line)}</p>
@@ -85,6 +86,11 @@ export function AccountOrderDetailPage() {
             <span>Total</span>
             <span>{formatPrice(order.total)}</span>
           </p>
+          {order.exchangeCouponCode && (
+            <p className="form-ok" data-testid="exchange-coupon">
+              Cupom {order.exchangeCouponCode} de {formatCouponValue(order.exchangeCouponValue ?? 0)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -105,36 +111,12 @@ export function AccountOrderDetailPage() {
 
       <section className="panel card-surface">
         <h2 className="panel__title">Ações do cliente</h2>
-        <div className="account-actions wrap">
-          {order.actions.cancel && (
-            <button type="button" className="btn-ghost" onClick={() => void run(() => cancelOrder(order.id))}>
-              Cancelar
-            </button>
-          )}
-          {order.actions.confirmReceipt && (
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => void run(() => confirmReceipt(order.id))}
-            >
-              {order.actions.pickup ? "Retirei" : STATUS_ACTION.ENTREGUE}
-            </button>
-          )}
-          {order.actions.dispatchItem && (
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => void run(() => dispatchExchangeItem(order.id))}
-            >
-              {STATUS_ACTION.ITEM_ENVIADO}
-            </button>
-          )}
-        </div>
         {order.actions.waitingMessage && <p className="muted">{order.actions.waitingMessage}</p>}
-        {order.status === "PAGAMENTO_REALIZADO" && order.actions.pickup && (
-          <p className="muted">O pedido está pronto. Retire no ateliê e confirme a retirada.</p>
+        {!order.actions.requestExchange && (
+          <p className="muted" data-testid="exchange-blocked">
+            A troca só pode ser pedida após a entrega.
+          </p>
         )}
-
         {order.actions.requestExchange && (
           <div className="exchange-box">
             <p className="field__label">Solicitar troca de um item</p>
@@ -142,6 +124,7 @@ export function AccountOrderDetailPage() {
               <select
                 className="field__control"
                 value={itemId}
+                data-testid="exchange-item"
                 onChange={(e) => setItemId(e.target.value)}
               >
                 {order.items.map((i) => (
@@ -156,19 +139,33 @@ export function AccountOrderDetailPage() {
                 min={1}
                 max={order.items.find((i) => i.id === itemId)?.quantity ?? 1}
                 value={qty}
+                data-testid="exchange-qty"
                 onChange={(e) => setQty(Number(e.target.value))}
               />
               <button
                 type="button"
                 className="btn-primary"
+                data-testid="request-exchange"
                 onClick={() => void run(() => requestExchange(order.id, itemId, qty))}
               >
                 Solicitar troca
               </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                data-testid="request-exchange-whole"
+                onClick={() => void run(() => requestExchange(order.id, itemId, qty, true))}
+              >
+                Trocar a compra inteira
+              </button>
             </div>
           </div>
         )}
-        {msg && <p className={msg === "Atualizado." ? "form-ok" : "form-error"}>{msg}</p>}
+        {msg && (
+          <p className={msg === "Atualizado." ? "form-ok" : "form-error"} data-testid="order-action-msg">
+            {msg}
+          </p>
+        )}
       </section>
     </div>
   );

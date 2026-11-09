@@ -90,6 +90,8 @@ declare global {
       logoutUi(): Chainable<void>;
       addToCart(productId: string, qty?: number): Chainable<void>;
       payCard(last4: string, amountDigits: string): Chainable<void>;
+      expireLocks(): Chainable<void>;
+      loginAdmin(): Chainable<void>;
     }
   }
 }
@@ -166,6 +168,16 @@ Cypress.Commands.add("addToCart", (productId, qty = 1) => {
 
 Cypress.Commands.add("payCard", (last4, amountDigits) => {
   cy.get(`[data-testid="pay-amount-${last4}"]`).clear().type(amountDigits);
+});
+
+Cypress.Commands.add("expireLocks", () => {
+  cy.request("POST", "/api/dev/expire-locks");
+});
+
+Cypress.Commands.add("loginAdmin", () => {
+  cy.loginAs("admin@3dstore.com", "admin123");
+  cy.visit("/admin");
+  cy.contains("Histórico de vendas");
 });
 
 export {};

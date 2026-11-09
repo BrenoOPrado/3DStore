@@ -5,32 +5,24 @@ export type CustomerStatus = "ativo" | "inativo";
 export type CouponType = "promocional" | "troca";
 
 export type OrderStatus =
-  | "EM_ABERTO"
   | "EM_PROCESSAMENTO"
-  | "PAGAMENTO_REALIZADO"
-  | "EM_TRANSITO"
+  | "APROVADA"
+  | "REPROVADA"
+  | "EM_TRANSPORTE"
   | "ENTREGUE"
-  | "CANCELADO"
-  | "TROCA_SOLICITADA"
-  | "TROCA_ACEITA"
-  | "TROCA_NEGADA"
-  | "ITEM_ENVIADO"
-  | "ITEM_RECEBIDO"
-  | "TROCA_PROCESSADA";
+  | "EM_TROCA"
+  | "TROCA_AUTORIZADA"
+  | "TROCADO";
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
-  EM_ABERTO: "Em aberto",
   EM_PROCESSAMENTO: "Em processamento",
-  PAGAMENTO_REALIZADO: "Pagamento realizado",
-  EM_TRANSITO: "Em trânsito",
+  APROVADA: "Aprovada",
+  REPROVADA: "Reprovada",
+  EM_TRANSPORTE: "Em transporte",
   ENTREGUE: "Entregue",
-  CANCELADO: "Cancelado",
-  TROCA_SOLICITADA: "Troca solicitada",
-  TROCA_ACEITA: "Troca aceita",
-  TROCA_NEGADA: "Troca negada",
-  ITEM_ENVIADO: "Item enviado",
-  ITEM_RECEBIDO: "Item recebido",
-  TROCA_PROCESSADA: "Troca processada",
+  EM_TROCA: "Em troca",
+  TROCA_AUTORIZADA: "Troca autorizada",
+  TROCADO: "Trocado",
 };
 
 export type AddressKind = "entrega" | "cobranca" | "ambos";
@@ -127,10 +119,7 @@ export type ShippingOption = {
 };
 
 export type OrderActions = {
-  cancel: boolean;
-  confirmReceipt: boolean;
   requestExchange: boolean;
-  dispatchItem: boolean;
   adminNext: OrderStatus[];
   waitingMessage: string | null;
   pickup: boolean;
@@ -155,21 +144,17 @@ export type Order = {
   total: number;
   exchangeItemId?: string;
   exchangeQty?: number;
+  exchangeWhole?: boolean;
   exchangeCouponCode?: string;
   exchangeCouponValue?: number;
   actions: OrderActions;
 };
 
 export const STATUS_ACTION: Partial<Record<OrderStatus, string>> = {
-  EM_PROCESSAMENTO: "Processar",
-  EM_TRANSITO: "Enviar",
-  ENTREGUE: "Recebi",
-  CANCELADO: "Cancelar",
-  TROCA_ACEITA: "Aceitar troca",
-  TROCA_NEGADA: "Negar troca",
-  ITEM_ENVIADO: "Despachar",
-  ITEM_RECEBIDO: "Receber item",
-  TROCA_PROCESSADA: "Processar troca",
+  EM_TRANSPORTE: "Despachar",
+  ENTREGUE: "Confirmar entrega",
+  TROCA_AUTORIZADA: "Autorizar troca",
+  TROCADO: "Confirmar recebimento da troca",
 };
 
 export function formatAddress(a: Address) {
@@ -209,14 +194,40 @@ export function formatCouponValue(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export type ChartPoint = { label: string; total: number; count: number };
-export type CategoryBar = { id: CategoryId; label: string; total: number };
+export type ChartSeries = {
+  id: CategoryId;
+  label: string;
+  color: string;
+  points: number[];
+};
 export type ChartData = {
-  months: ChartPoint[];
-  categories: CategoryBar[];
+  months: string[];
+  monthKeys: string[];
+  series: ChartSeries[];
+  totals: number[];
   revenue: number;
   orderCount: number;
   totalOrders: number;
+  start?: string;
+  end?: string;
+  error?: string;
+};
+
+export type StoreNotification = {
+  id: string;
+  at: string;
+  title: string;
+  body: string;
+  orderId?: string;
+  read: boolean;
+};
+
+export type CartSnapshot = {
+  items: { productId: string; color: string; quantity: number }[];
+  expired: { productId: string; color: string; quantity: number }[];
+  buyDisabled: boolean;
+  expiresAt: string | null;
+  warnAt: string | null;
 };
 
 export type { Product };

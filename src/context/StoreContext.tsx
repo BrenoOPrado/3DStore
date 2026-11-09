@@ -12,6 +12,7 @@ import type { QuoteResult, Snapshot } from "../api/types";
 import type {
   Address,
   Card,
+  CartSnapshot,
   ChartData,
   Coupon,
   CouponType,
@@ -20,6 +21,7 @@ import type {
   Order,
   OrderStatus,
   PublicUser,
+  StoreNotification,
 } from "../data/commerce";
 import type { CustomerFilter } from "../data/customerRules";
 import { type Product } from "../data/products";
@@ -30,7 +32,7 @@ type PlaceOrderInput = {
   saveAddress?: boolean;
   shippingId: string;
   couponCodes: string[];
-  payments: { cardId: string; amount: number }[];
+  payments: { cardId: string; amount: number; cvv?: string }[];
   items: { productId: string; color: string; quantity: number }[];
   newCard?: {
     holder: string;
@@ -46,6 +48,7 @@ type PlaceOrderInput = {
 const emptySnapshot: Snapshot = {
   user: null,
   catalog: [],
+  adminCatalog: [],
   categories: [],
   customers: [],
   orders: [],
@@ -54,6 +57,8 @@ const emptySnapshot: Snapshot = {
   myCoupons: [],
   myUsedCoupons: [],
   lastOrderId: null,
+  cart: { items: [], expired: [], buyDisabled: false, expiresAt: null, warnAt: null },
+  notifications: [],
 };
 
 type StoreValue = {
@@ -63,6 +68,7 @@ type StoreValue = {
   orders: Order[];
   coupons: Coupon[];
   catalog: Product[];
+  adminCatalog: Product[];
   login: (email: string, password: string) => Promise<string | null>;
   signup: (data: {
     name: string;
@@ -99,8 +105,9 @@ type StoreValue = {
   setPreferredCard: (id: string) => Promise<string | null>;
   addProduct: (data: Omit<Product, "id" | "rating" | "reviews"> & Partial<Pick<Product, "rating" | "reviews">>) =>
     Promise<string | { error: string }>;
-  updateProduct: (product: Product) => Promise<string | null>;
+  updateProduct: (product: Product, extras?: { priceConfirmations?: number }) => Promise<string | null>;
   deleteProduct: (id: string) => Promise<string | null>;
+  restoreProduct: (id: string) => Promise<string | null>;
   addCoupon: (data: {
     code: string;
     value: number;
@@ -118,15 +125,25 @@ type StoreValue = {
     shippingId?: string;
     cep: string;
   }) => Promise<QuoteResult | { error: string }>;
-  placeOrder: (input: PlaceOrderInput) => Promise<string | { error: string }>;
-  cancelOrder: (id: string) => Promise<string | null>;
-  confirmReceipt: (id: string) => Promise<string | null>;
-  requestExchange: (orderId: string, itemId: string, qty: number) => Promise<string | null>;
-  dispatchExchangeItem: (orderId: string) => Promise<string | null>;
+  placeOrder: (input: PlaceOrderInput) => Promise<string | { error: string; alerts?: string[] }>;
+  requestExchange: (orderId: string, itemId: string, qty: number, whole?: boolean) => Promise<string | null>;
   adminSetStatus: (orderId: string, status: OrderStatus) => Promise<string | null>;
-  loadChart: (categoryIds?: string[]) => Promise<ChartData | { error: string }>;
+  loadChart: (input?: {
+    categoryIds?: string[];
+    start?: string;
+    end?: string;
+  }) => Promise<ChartData | { error: string }>;
   searchCustomers: (filter: CustomerFilter) => Promise<Customer[]>;
   lastOrderId: string | null;
+  cart: CartSnapshot;
+  notifications: StoreNotification[];
+  addToCart: (productId: string, color: string, quantity?: number) => Promise<string | null>;
+  setCartQty: (productId: string, color: string, quantity: number) => Promise<string | null>;
+  removeCartItem: (productId: string, color: string) => Promise<string | null>;
+  clearCart: () => Promise<string | null>;
+  dismissExpiredCart: () => Promise<string | null>;
+  expireLocks: () => Promise<string | null>;
+  markNotificationRead: (id: string) => Promise<string | null>;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -135,6 +152,7 @@ function pickSnapshot(data: Record<string, unknown>): Snapshot {
   return {
     user: (data.user as PublicUser | null) ?? null,
     catalog: (data.catalog as Product[]) ?? [],
+    adminCatalog: (data.adminCatalog as Product[]) ?? (data.catalog as Product[]) ?? [],
     categories: (data.categories as Snapshot["categories"]) ?? [],
     customers: (data.customers as Customer[]) ?? [],
     orders: (data.orders as Order[]) ?? [],
@@ -143,6 +161,8 @@ function pickSnapshot(data: Record<string, unknown>): Snapshot {
     myCoupons: (data.myCoupons as Coupon[]) ?? [],
     myUsedCoupons: (data.myUsedCoupons as Coupon[]) ?? [],
     lastOrderId: (data.lastOrderId as string | null) ?? null,
+    cart: (data.cart as CartSnapshot) ?? emptySnapshot.cart,
+    notifications: (data.notifications as StoreNotification[]) ?? [],
   };
 }
 
@@ -282,16 +302,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return String(data.id ?? "");
     };
 
-    const updateProduct: StoreValue["updateProduct"] = async (product) => {
+    const updateProduct: StoreValue["updateProduct"] = async (product, extras = {}) => {
       const { error } = await mutate(`/api/admin/products/${product.id}`, {
         method: "PUT",
-        body: JSON.stringify(product),
+        body: JSON.stringify({ ...product, priceConfirmations: extras.priceConfirmations ?? 0 }),
       });
       return error;
     };
 
     const deleteProduct: StoreValue["deleteProduct"] = async (id) => {
       const { error } = await mutate(`/api/admin/products/${id}`, { method: "DELETE" });
+      return error;
+    };
+
+    const restoreProduct: StoreValue["restoreProduct"] = async (id) => {
+      const { error } = await mutate(`/api/admin/products/${id}/restore`, { method: "POST" });
       return error;
     };
 
@@ -329,26 +354,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return String(data.id ?? "");
     };
 
-    const cancelOrder: StoreValue["cancelOrder"] = async (id) => {
-      const { error } = await mutate(`/api/orders/${id}/cancel`, { method: "POST" });
-      return error;
-    };
-
-    const confirmReceipt: StoreValue["confirmReceipt"] = async (id) => {
-      const { error } = await mutate(`/api/orders/${id}/confirm-receipt`, { method: "POST" });
-      return error;
-    };
-
-    const requestExchange: StoreValue["requestExchange"] = async (orderId, itemId, qty) => {
+    const requestExchange: StoreValue["requestExchange"] = async (orderId, itemId, qty, whole = false) => {
       const { error } = await mutate(`/api/orders/${orderId}/exchange`, {
         method: "POST",
-        body: JSON.stringify({ itemId, qty }),
+        body: JSON.stringify({ itemId, qty, whole }),
       });
-      return error;
-    };
-
-    const dispatchExchangeItem: StoreValue["dispatchExchangeItem"] = async (orderId) => {
-      const { error } = await mutate(`/api/orders/${orderId}/dispatch-item`, { method: "POST" });
       return error;
     };
 
@@ -360,13 +370,57 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return error;
     };
 
-    const loadChart: StoreValue["loadChart"] = async (categoryIds = []) => {
+    const loadChart: StoreValue["loadChart"] = async (input = {}) => {
       try {
-        const qs = categoryIds.length ? `?categories=${categoryIds.join(",")}` : "";
-        return await api<ChartData>(`/api/admin/chart${qs}`);
+        const params = new URLSearchParams();
+        if (input.categoryIds?.length) params.set("categories", input.categoryIds.join(","));
+        if (input.start) params.set("start", input.start);
+        if (input.end) params.set("end", input.end);
+        const qs = params.toString();
+        return await api<ChartData>(`/api/admin/chart${qs ? `?${qs}` : ""}`);
       } catch (err) {
         return { error: err instanceof ApiError ? err.message : "Não foi possível carregar o gráfico." };
       }
+    };
+
+    const addToCart: StoreValue["addToCart"] = async (productId, color, quantity = 1) => {
+      const { error } = await mutate("/api/cart/items", {
+        method: "POST",
+        body: JSON.stringify({ productId, color, quantity }),
+      });
+      return error;
+    };
+
+    const setCartQty: StoreValue["setCartQty"] = async (productId, color, quantity) => {
+      const { error } = await mutate("/api/cart/items", {
+        method: "PATCH",
+        body: JSON.stringify({ productId, color, quantity }),
+      });
+      return error;
+    };
+
+    const removeCartItem: StoreValue["removeCartItem"] = async (productId, color) => {
+      return setCartQty(productId, color, 0);
+    };
+
+    const clearCart: StoreValue["clearCart"] = async () => {
+      const { error } = await mutate("/api/cart/clear", { method: "POST" });
+      return error;
+    };
+
+    const dismissExpiredCart: StoreValue["dismissExpiredCart"] = async () => {
+      const { error } = await mutate("/api/cart/dismiss-expired", { method: "POST" });
+      return error;
+    };
+
+    const expireLocks: StoreValue["expireLocks"] = async () => {
+      const { error } = await mutate("/api/dev/expire-locks", { method: "POST" });
+      return error;
+    };
+
+    const markNotificationRead: StoreValue["markNotificationRead"] = async (id) => {
+      const { error } = await mutate(`/api/notifications/${id}/read`, { method: "POST" });
+      return error;
     };
 
     const searchCustomers: StoreValue["searchCustomers"] = async (filter) => {
@@ -385,6 +439,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       orders: state.orders,
       coupons: state.coupons,
       catalog: state.catalog,
+      adminCatalog: state.adminCatalog ?? state.catalog,
       login,
       signup,
       logout,
@@ -401,6 +456,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addProduct,
       updateProduct,
       deleteProduct,
+      restoreProduct,
       addCoupon,
       removeCoupon,
       myOrders: state.myOrders,
@@ -408,14 +464,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       myUsedCoupons: state.myUsedCoupons,
       quoteCheckout,
       placeOrder,
-      cancelOrder,
-      confirmReceipt,
       requestExchange,
-      dispatchExchangeItem,
       adminSetStatus,
       loadChart,
       searchCustomers,
       lastOrderId: state.lastOrderId,
+      cart: state.cart ?? emptySnapshot.cart!,
+      notifications: state.notifications ?? [],
+      addToCart,
+      setCartQty,
+      removeCartItem,
+      clearCart,
+      dismissExpiredCart,
+      expireLocks,
+      markNotificationRead,
     };
   }, [apply, ready, state]);
 

@@ -18,12 +18,16 @@ export function ProductPage() {
   const [cartError, setCartError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!product) return;
-    setColor(product.colors[0]);
+    if (!id) return;
+    setColor("");
     setQty(1);
     setAdded(false);
     setCartError(null);
-  }, [product]);
+  }, [id]);
+
+  useEffect(() => {
+    if (product && !color) setColor(product.colors[0]);
+  }, [product, color]);
 
   if (!product) {
     return (
@@ -43,12 +47,12 @@ export function ProductPage() {
   const stock = typeof product.stock === "number" ? product.stock : 20;
   const canBuy = Boolean(user) && stock > 0;
 
-  const addToCart = () => {
+  const addToCart = async () => {
     if (!user) {
       navigate("/entrar", { state: { from: `/produto/${product.id}` } });
       return;
     }
-    const err = add(product.id, color || product.colors[0], qty);
+    const err = await add(product.id, color || product.colors[0], qty);
     if (err) {
       setCartError(err);
       setAdded(false);

@@ -1,6 +1,7 @@
 import type {
   Address,
   Card,
+  CartSnapshot,
   ChartData,
   Coupon,
   CouponType,
@@ -9,12 +10,14 @@ import type {
   Order,
   OrderStatus,
   PublicUser,
+  StoreNotification,
 } from "../data/commerce";
 import type { CategoryId, Product } from "../data/products";
 
 export type Snapshot = {
   user: PublicUser | null;
   catalog: Product[];
+  adminCatalog?: Product[];
   categories: { id: CategoryId; label: string; icon: string; tint: string }[];
   customers: Customer[];
   orders: Order[];
@@ -23,6 +26,8 @@ export type Snapshot = {
   myCoupons: Coupon[];
   myUsedCoupons: Coupon[];
   lastOrderId: string | null;
+  cart?: CartSnapshot;
+  notifications?: StoreNotification[];
   logs?: {
     id: string;
     at: string;
@@ -45,4 +50,4 @@ export type QuoteResult = {
   total: number;
 };
 
-export type { Address, Card, ChartData, Coupon, CouponType, Customer, CustomerStatus, Order, OrderStatus, PublicUser, Product };
+export type { Address, Card, CartSnapshot, ChartData, Coupon, CouponType, Customer, CustomerStatus, Order, OrderStatus, PublicUser, Product, StoreNotification };

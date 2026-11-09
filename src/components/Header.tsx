@@ -17,7 +17,8 @@ const nav = [
 export function Header() {
   const { count } = useCart();
   const { user, logout } = useAuth();
-  const { catalog } = useStore();
+  const { catalog, notifications } = useStore();
+  const unread = notifications.filter((n) => !n.read).length;
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -108,9 +109,14 @@ export function Header() {
               >
                 {user.name}
               </Link>
-              <Link to="/conta/pedidos" className="login-link">
+              <Link to="/conta/pedidos" className="login-link" data-testid="nav-orders">
                 Pedidos
               </Link>
+              {unread > 0 && (
+                <Link to="/conta/pedidos" className="login-link" data-testid="nav-notifications">
+                  {unread} aviso(s)
+                </Link>
+              )}
               <button type="button" onClick={() => void logout()} className="btn-outline" data-testid="logout">
                 Sair
               </button>

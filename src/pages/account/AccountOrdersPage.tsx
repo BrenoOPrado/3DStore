@@ -10,7 +10,7 @@ export function AccountOrdersPage() {
     <div>
       <p className="eyebrow">Pedidos</p>
       <h1 className="page-title">Consultar pedidos</h1>
-      <p className="page-lead">Acompanhe status, cancele, confirme o recebimento ou peça troca.</p>
+      <p className="page-lead">Acompanhe o status dos pedidos e solicite troca após a entrega.</p>
 
       {myOrders.length === 0 ? (
         <p className="muted">Você ainda não fez pedidos.</p>

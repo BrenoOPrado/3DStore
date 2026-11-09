@@ -2020,18 +2020,15 @@ textarea.field__control {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.status-EM_ABERTO { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
 .status-EM_PROCESSAMENTO { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; }
-.status-PAGAMENTO_REALIZADO { background: rgba(34, 211, 238, 0.2); color: var(--cyan); }
-.status-EM_TRANSITO { background: rgba(96, 165, 250, 0.2); color: #93c5fd; }
-.status-ENTREGUE { background: rgba(52, 211, 153, 0.2); color: #34d399; }
+.status-APROVADA { background: rgba(34, 211, 238, 0.2); color: var(--cyan); }
+.status-REPROVADA,
 .status-CANCELADO { background: rgba(248, 113, 113, 0.2); color: #f87171; }
-.status-TROCA_SOLICITADA,
-.status-TROCA_ACEITA,
-.status-ITEM_ENVIADO,
-.status-ITEM_RECEBIDO { background: rgba(251, 146, 60, 0.2); color: #fb923c; }
-.status-TROCA_NEGADA { background: rgba(248, 113, 113, 0.2); color: #f87171; }
-.status-TROCA_PROCESSADA { background: rgba(52, 211, 153, 0.2); color: #34d399; }
+.status-EM_TRANSPORTE { background: rgba(96, 165, 250, 0.2); color: #93c5fd; }
+.status-ENTREGUE { background: rgba(52, 211, 153, 0.2); color: #34d399; }
+.status-EM_TROCA,
+.status-TROCA_AUTORIZADA { background: rgba(251, 146, 60, 0.2); color: #fb923c; }
+.status-TROCADO { background: rgba(52, 211, 153, 0.2); color: #34d399; }
 
 .timeline {
   display: flex;
@@ -2117,6 +2114,25 @@ textarea.field__control {
   margin: 16px 0 8px;
 }
 
+.product-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.confirm-box {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.confirm-box p {
+  margin: 0 0 12px;
+}
+
 .chart-filters {
   display: flex;
   flex-wrap: wrap;
@@ -2164,6 +2180,77 @@ textarea.field__control {
   fill: #22d3ee;
   stroke: #12121a;
   stroke-width: 2;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.chart-legend__swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.chart-breakdown {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chart-breakdown__item {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.chart-breakdown__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.chart-breakdown__toggle svg {
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+
+.chart-breakdown__toggle.is-open svg {
+  transform: rotate(180deg);
+}
+
+.chart-breakdown__months {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
 }
 
 .cat-bars {

@@ -7,6 +7,8 @@ export type CategoryId =
   | "cutelaria"
   | "acessorios";
 
+export type ProductStatus = "ativo" | "inativo";
+
 export type Product = {
   id: string;
   name: string;
@@ -20,11 +22,16 @@ export type Product = {
   material: string;
   colors: string[];
   stock?: number;
+  status?: ProductStatus;
   isNew?: boolean;
   featured?: boolean;
   imageFit?: "cover" | "contain";
   imagePosition?: "center" | "top";
 };
+
+export function isListedProduct(product: Product) {
+  return (product.status ?? "ativo") === "ativo";
+}
 
 export const categories: {
   id: CategoryId;

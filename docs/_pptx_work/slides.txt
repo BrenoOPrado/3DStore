@@ -1,0 +1,209 @@
+===== slide1.xml =====
+3D Store
+E-commerce de 
+Produtos
+ 
+Impressos
+ 
+em
+ 3D
+Breno Oliveira do Prado
+3D Store — 
+Projeto
+ de E-commerce
+RELS: ../slideLayouts/slideLayout1.xml
+
+===== slide2.xml =====
+Tema e proposta
+A 3D Store é um e-commerce de peças físicas produzidas por impressão 3D. O cliente consulta o catálogo, compra e acompanha a entrega; o ateliê gerencia cadastros, vendas e cupons.
+Escopo do protótipo:
+CRUD completo de clientes, com endereços, cartões e senha
+Catálogo e cadastro de produtos impressos em 3D
+Carrinho, checkout, frete e gestão de pedidos
+Trocas com geração de cupom
+Cupons promocionais e de troca
+Dashboard de receita no painel administrativo
+Chat de recomendação e testes de interface automatizados
+3D Store
+ — Projeto de E-commerce
+RELS: ../slideLayouts/slideLayout6.xml
+
+===== slide3.xml =====
+Tecnologias
+O DRS prevê uma arquitetura em camadas. Neste semestre a SPA consome uma API própria para as regras de negócio.
+Front-end: React 19, TypeScript e Vite
+Testes de interface: Cypress
+Apoio ao desenvolvimento: Cursor
+Versionamento: Git e GitHub
+Back-end: Node.js (Express) e TypeScript, com persistência em JSON
+Visão de destino: PostgreSQL, Recharts e OpenAI
+3D Store
+ — Projeto de E-commerce
+RELS: ../slideLayouts/slideLayout6.xml
+
+===== slide4.xml =====
+Trello
+ dos requisitos
+3D Store — Projeto de E-commerce
+RELS: ../media/image2.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide5.xml =====
+Trello
+ dos requisitos
+3D Store — Projeto de E-commerce
+RELS: ../media/image3.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide6.xml =====
+Trello
+ dos requisitos
+3D Store — Projeto de E-commerce
+RELS: ../media/image4.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml, ../media/image6.png, ../media/image5.png
+
+===== slide7.xml =====
+Trello
+ dos requisitos
+3D Store — Projeto de E-commerce
+RELS: ../media/image7.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml, ../media/image9.png, ../media/image8.png
+
+===== slide8.xml =====
+Trello
+ dos requisitos
+3D Store — Projeto de E-commerce
+RELS: ../media/image10.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml, ../media/image12.png, ../media/image11.png
+
+===== slide9.xml =====
+Tela inicial
+3D Store — Projeto de E-commerce
+Vitrine da 3D Store: proposta da marca, atalho para o catálogo e busca no topo.
+O visitante conhece o ateliê antes de entrar na conta.
+A navegação leva a catálogo, lançamentos e autenticação.
+RELS: ../media/image13.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide10.xml =====
+Login
+3D Store — Projeto de E-commerce
+Acesso único para cliente e administrador, com validação de e-mail e senha.
+Contas inativas são bloqueadas até o ateliê reativar o cadastro.
+Há contas de demonstração para apresentar o fluxo em sala.
+RELS: ../media/image14.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide11.xml =====
+Cadastro de cliente
+3D Store — Projeto de E-commerce
+Coleta nome, e-mail, CPF, gênero, nascimento e telefone (tipo, DDD e número).
+A senha exige confirmação e complexidade mínima.
+O primeiro endereço precisa servir de cobrança e de entrega.
+RELS: ../media/image15.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide12.xml =====
+Catálogo
+3D Store — Projeto de E-commerce
+Listagem das peças impressas, com categorias, busca e cards de produto.
+Preço, avaliação e atalho para o detalhe ficam visíveis em cada item.
+É o ponto de partida da jornada de compra.
+RELS: ../media/image16.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide13.xml =====
+Detalhe do produto
+3D Store — Projeto de E-commerce
+Página com fotos, material, cores e quantidade antes de ir ao carrinho.
+Somente quem está autenticado consegue adicionar o item.
+A descrição explica o uso da peça no dia a dia.
+RELS: ../media/image17.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide14.xml =====
+Carrinho
+3D Store — Projeto de E-commerce
+Repositório temporário da compra: alterar quantidade, remover item e ver o subtotal.
+O cliente segue para o checkout quando o pedido está conferido.
+O carrinho fica associado à sessão de quem está logado.
+RELS: ../media/image18.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide15.xml =====
+Checkout — entrega
+3D Store — Projeto de E-commerce
+Escolha de endereço salvo ou cadastro de um novo, com opção de gravar no perfil.
+O frete é calculado pelo CEP: PAC, Sedex ou retirada no ateliê.
+Cupons promocionais e de troca entram nesta mesma etapa.
+RELS: ../media/image19.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide16.xml =====
+Checkout — pagamento
+3D Store — Projeto de E-commerce
+É possível pagar com um ou mais cartões, inclusive um recém-cadastrado.
+A soma dos valores deve cobrir o total após o desconto dos cupons.
+O resumo à direita confirma itens, frete e total.
+RELS: ../media/image20.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide17.xml =====
+Pedido confirmado
+3D Store — Projeto de E-commerce
+Após finalizar, o pedido nasce em aberto e aguarda o ateliê processar.
+O cliente vê o resumo, o endereço e a forma de envio.
+Quando o admin processa, o sistema confirma o pagamento.
+RELS: ../media/image21.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide18.xml =====
+Consulta do pedido
+3D Store — Projeto de E-commerce
+Na conta, o cliente acompanha status, itens, endereço e histórico.
+Daqui saem o cancelamento (enquanto permitido), o recebimento e o pedido de troca.
+Cada transição fica registrada na linha do tempo.
+RELS: ../media/image22.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide19.xml =====
+Cartões
+3D Store — Projeto de E-commerce
+A conta guarda vários cartões, com bandeira e um marcado como preferencial.
+Número, nome, validade e CVV são validados; o CVV não é armazenado.
+Os mesmos cartões ficam disponíveis no checkout.
+RELS: ../media/image23.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide20.xml =====
+Endereços
+3D Store — Projeto de E-commerce
+Endereços ficam em tela própria, cada um com um apelido único.
+É obrigatório manter cobrança e entrega, com tipo de residência, logradouro, CEP e país.
+O checkout reutiliza esses registros sem reeditar o cadastro.
+RELS: ../media/image24.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide21.xml =====
+Gráficos de vendas
+3D Store — Projeto de E-commerce
+O painel administrativo mostra a receita ao longo dos meses em gráfico de linha.
+Há também o recorte por categoria para o ateliê acompanhar o mix vendido.
+Os dados vêm dos pedidos já registrados no protótipo.
+RELS: ../media/image25.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide22.xml =====
+Lista de clientes
+3D Store — Projeto de E-commerce
+O admin consulta clientes por nome, e-mail, CPF, telefone, gênero, situação ou código.
+Inativar preserva o cadastro; a exclusão continua sendo do próprio cliente.
+O detalhe reúne ranking, endereços, cartões e pedidos.
+RELS: ../media/image26.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide23.xml =====
+Lista de pedidos
+3D Store — Projeto de E-commerce
+Central de vendas do ateliê: filtrar, abrir o pedido e avançar o status.
+Daqui o admin processa pagamento, despacha e trata trocas.
+O fluxo evita o trânsito quando a modalidade é retirada.
+RELS: ../media/image27.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide24.xml =====
+Lista de produtos
+3D Store — Projeto de E-commerce
+CRUD administrativo do catálogo: incluir, editar e remover peças.
+Nome, preço, categoria, cores e mídia alimentam a loja imediatamente.
+É o equivalente ao cadastro de livros do DRS, adaptado à impressão 3D.
+RELS: ../media/image28.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+
+===== slide25.xml =====
+Lista de cupons
+3D Store — Projeto de E-commerce
+O admin cria cupons promocionais ou de troca, com código e percentual.
+Cupons de troca ficam vinculados ao cliente após uma troca aceita.
+No checkout, o código é digitado e o desconto incide sobre o subtotal.
+RELS: ../media/image29.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
+

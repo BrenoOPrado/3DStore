@@ -65,6 +65,7 @@ describe("Gestao de vendas", () => {
     cy.get('[data-testid="confirm-order"]').click();
     cy.get('[data-testid="order-status"]').should("contain", "Em processamento");
     cy.get('[data-testid="order-status-title"]').should("contain", "processamento");
+    cy.get('[data-testid="order-current-status"]').should("contain", "Aprovada");
 
     cy.request("POST", "/api/auth/login", { email: "admin@3dstore.com", password: "admin123" });
     cy.request("/api/admin/logs").then((res) => {
@@ -98,6 +99,7 @@ describe("Gestao de vendas", () => {
     cy.payCard("1111", "3490");
     cy.get('[data-testid="confirm-order"]').click();
     cy.get('[data-testid="order-status"]').should("contain", "Em processamento");
+    cy.get('[data-testid="order-current-status"]').should("contain", "Aprovada");
 
     cy.visit("/conta/enderecos");
     cy.get('[data-testid="address-Apartamento"]').should("contain", "Oscar Freire");
@@ -120,6 +122,7 @@ describe("Gestao de vendas", () => {
     cy.get('[data-testid="split-even"]').click();
     cy.get('[data-testid="confirm-order"]').click();
     cy.get('[data-testid="order-status"]').should("contain", "Em processamento");
+    cy.get('[data-testid="order-current-status"]').should("contain", "Aprovada");
   });
 
   it("paga com cupom e cartao abaixo de R$ 10,00 (RN0035)", () => {
@@ -133,6 +136,7 @@ describe("Gestao de vendas", () => {
     cy.payCard("1111", "790");
     cy.get('[data-testid="confirm-order"]').click();
     cy.get('[data-testid="order-status"]').should("contain", "Em processamento");
+    cy.get('[data-testid="order-current-status"]').should("contain", "Aprovada");
   });
 
   it("recusa cupons desnecessarios e gera cupom de troca da diferenca (RN0036)", () => {
@@ -150,6 +154,7 @@ describe("Gestao de vendas", () => {
     cy.get('[data-testid="checkout-total"]').should("contain", "0,00");
     cy.get('[data-testid="confirm-order"]').click();
     cy.get('[data-testid="order-status"]').should("contain", "Em processamento");
+    cy.get('[data-testid="order-current-status"]').should("contain", "Aprovada");
     cy.get('[data-testid="generated-coupon"]').should("contain", "TROCA-");
     cy.get('[data-testid="generated-coupon"]').invoke("text").then((text) => {
       const code = text.match(/TROCA-[A-Z0-9-]+/)?.[0];

@@ -44,7 +44,7 @@ export function AdminOrdersPage() {
       <ul className="stack-list">
         {list.map((o) => (
           <li key={o.id}>
-            <Link to={`/admin/pedidos/${o.id}`} className="panel card-surface order-row">
+            <Link to={`/admin/pedidos/${o.id}`} className="panel card-surface order-row" data-testid={`admin-order-${o.id}`}>
               <div>
                 <p className="coupon-code">{o.id}</p>
                 <p className="muted">
@@ -77,10 +77,6 @@ export function AdminOrderDetailPage() {
       setMsg(err);
       return;
     }
-    if (status === "EM_PROCESSAMENTO") {
-      setMsg("Pedido processado. O sistema confirmou o pagamento.");
-      return;
-    }
     setMsg(`Status alterado para ${STATUS_LABEL[status]}.`);
   };
 
@@ -94,7 +90,9 @@ export function AdminOrderDetailPage() {
       </p>
       <div className="section__head">
         <h1 className="page-title">{order.id}</h1>
-        <span className={`status-pill status-${order.status}`}>{STATUS_LABEL[order.status]}</span>
+        <span className={`status-pill status-${order.status}`} data-testid="admin-order-status">
+          {STATUS_LABEL[order.status]}
+        </span>
       </div>
       <p className="page-lead">
         Cliente{" "}
@@ -108,7 +106,7 @@ export function AdminOrderDetailPage() {
           <li key={item.id} className="checkout-item">
             <img src={item.image} alt="" />
             <div className="checkout-item__info">
-              <p>{item.name}</p>
+              <p data-testid={`order-item-${item.productId}`}>{item.name}</p>
               <p>
                 {item.color} · {item.quantity}x
                 {order.exchangeItemId === item.id ? " · item da troca" : ""}
@@ -149,14 +147,20 @@ export function AdminOrderDetailPage() {
         ) : next.length === 0 ? null : (
           <div className="account-actions wrap">
             {next.map((s) => (
-              <button key={s} type="button" className="btn-primary" onClick={() => void apply(s)}>
+              <button
+                key={s}
+                type="button"
+                className="btn-primary"
+                data-testid={`admin-status-${s}`}
+                onClick={() => void apply(s)}
+              >
                 {STATUS_ACTION[s] ?? STATUS_LABEL[s]}
               </button>
             ))}
           </div>
         )}
         {msg && (
-          <p className={msg.startsWith("Status") || msg.startsWith("Pedido processado") ? "form-ok" : "form-error"}>
+          <p className={msg.startsWith("Status") ? "form-ok" : "form-error"} data-testid="admin-status-msg">
             {msg}
           </p>
         )}
