@@ -7,6 +7,7 @@ import {
   seedState,
   type CommerceState,
 } from "./data/commerce";
+import { emptyModel, trainAiModel } from "./ai/recommender";
 import { DEFAULT_LOCK_MS } from "./data/orderFlow";
 
 const dataDir = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
@@ -16,20 +17,43 @@ let state: CommerceState = seedState();
 
 function hydrate(raw: CommerceState): CommerceState {
   const seeded = seedState();
-  const customers = (raw.customers ?? []).map((c) => migrateCustomer(c));
+  const existingCustomers = (raw.customers ?? []).map((c) => migrateCustomer(c));
+  const haveCust = new Set(existingCustomers.map((c) => c.id));
+  const extraCust = existingCustomers.length
+    ? seeded.customers.filter((c) => !haveCust.has(c.id))
+    : [];
+  const customers = [...(existingCustomers.length ? existingCustomers : seeded.customers), ...extraCust].map(
+    (c) => {
+      const seed = seeded.customers.find((s) => s.id === c.id);
+      return {
+        ...c,
+        preferences: c.preferences?.length ? c.preferences : seed?.preferences,
+      };
+    }
+  );
   const existing = raw.catalog?.length ? raw.catalog : [];
   const have = new Set(existing.map((p) => p.id));
   const extras = existing.length ? seeded.catalog.filter((p) => !have.has(p.id)) : [];
   const catalog = [...(existing.length ? existing : seeded.catalog), ...extras].map((p) => ({
     ...p,
     stock: typeof p.stock === "number" ? p.stock : 20,
-    status: p.status === "inativo" ? "inativo" : "ativo",
+    status: p.status === "inativo" ? ("inativo" as const) : ("ativo" as const),
   }));
-  const orders = (raw.orders ?? []).map((o) => ({
+  const existingOrders = raw.orders ?? [];
+  const haveOrder = new Set(existingOrders.map((o) => o.id));
+  const extraOrders = existingOrders.length
+    ? seeded.orders.filter((o) => !haveOrder.has(o.id))
+    : [];
+  const orders = [...(existingOrders.length ? existingOrders : seeded.orders), ...extraOrders].map((o) => ({
     ...o,
     status: migrateOrderStatus(o.status),
     history: (o.history ?? []).map((h) => ({ ...h, status: migrateOrderStatus(h.status) })),
   }));
+  const chatFeedback = raw.chatFeedback?.length ? raw.chatFeedback : seeded.chatFeedback;
+  const aiModel =
+    raw.aiModel && raw.aiModel.version > 0
+      ? raw.aiModel
+      : trainAiModel(orders, chatFeedback, catalog, emptyModel());
   return {
     customers,
     orders,
@@ -42,6 +66,8 @@ function hydrate(raw: CommerceState): CommerceState {
     notifications: raw.notifications ?? [],
     clockOffsetMs: raw.clockOffsetMs ?? 0,
     lockTtlMs: raw.lockTtlMs ?? DEFAULT_LOCK_MS,
+    chatFeedback,
+    aiModel,
   };
 }
 
@@ -59,7 +85,12 @@ export function loadStore() {
       persist();
       return state;
     }
+    const parsedOrderCount = parsed.orders?.length ?? 0;
+    const parsedCustCount = parsed.customers?.length ?? 0;
     state = hydrate(parsed);
+    if (state.orders.length > parsedOrderCount || state.customers.length > parsedCustCount) {
+      persist();
+    }
   } catch {
     state = seedState();
     persist();

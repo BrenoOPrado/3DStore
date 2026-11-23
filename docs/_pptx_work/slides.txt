@@ -15,15 +15,15 @@ RELS: ../slideLayouts/slideLayout1.xml
 
 ===== slide2.xml =====
 Tema e proposta
-A 3D Store é um e-commerce de peças físicas produzidas por impressão 3D. O cliente consulta o catálogo, compra e acompanha a entrega; o ateliê gerencia cadastros, vendas e cupons.
+A 3D Store é um e-commerce de peças físicas produzidas por impressão 3D. O cliente consulta o catálogo, compra e acompanha a entrega; o ateliê gerencia cadastros, vendas, estoque e análises.
 Escopo do protótipo:
 CRUD completo de clientes, com endereços, cartões e senha
-Catálogo e cadastro de produtos impressos em 3D
-Carrinho, checkout, frete e gestão de pedidos
-Trocas com geração de cupom
-Cupons promocionais e de troca
-Dashboard de receita no painel administrativo
-Chat de recomendação e testes de interface automatizados
+Catálogo e CRUD de produtos 3D, com exclusão que preserva o histórico
+Carrinho com bloqueio temporário, checkout, frete e ciclo de pedidos
+Trocas com cupom, reentrada em estoque e notificações
+Cupons promocionais e de troca em reais
+Análise gráfica por categoria e período, só vendas ENTREGUE
+Chat de recomendação e Cypress (clientes, vendas, ciclo, análise e produtos)
 3D Store
  — Projeto de E-commerce
 RELS: ../slideLayouts/slideLayout6.xml
@@ -31,11 +31,11 @@ RELS: ../slideLayouts/slideLayout6.xml
 ===== slide3.xml =====
 Tecnologias
 O DRS prevê uma arquitetura em camadas. Neste semestre a SPA consome uma API própria para as regras de negócio.
-Front-end: React 19, TypeScript e Vite
-Testes de interface: Cypress
+Front-end: React 19, TypeScript e Vite 7
+Testes de interface: Cypress (11 especificações e2e)
 Apoio ao desenvolvimento: Cursor
 Versionamento: Git e GitHub
-Back-end: Node.js (Express) e TypeScript, com persistência em JSON
+Back-end: Node.js (Express 5) e TypeScript, JSON em store.json
 Visão de destino: PostgreSQL, Recharts e OpenAI
 3D Store
  — Projeto de E-commerce
@@ -106,7 +106,7 @@ RELS: ../media/image16.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.x
 ===== slide13.xml =====
 Detalhe do produto
 3D Store — Projeto de E-commerce
-Página com fotos, material, cores e quantidade antes de ir ao carrinho.
+Página com fotos, material, cores, estoque e quantidade antes do carrinho.
 Somente quem está autenticado consegue adicionar o item.
 A descrição explica o uso da peça no dia a dia.
 RELS: ../media/image17.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
@@ -114,9 +114,9 @@ RELS: ../media/image17.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.x
 ===== slide14.xml =====
 Carrinho
 3D Store — Projeto de E-commerce
-Repositório temporário da compra: alterar quantidade, remover item e ver o subtotal.
-O cliente segue para o checkout quando o pedido está conferido.
-O carrinho fica associado à sessão de quem está logado.
+Repositório temporário: quantidade, estoque visível, remoção e subtotal.
+O item fica bloqueado por prazo; se expirar, volta ao estoque.
+Comprar fica desabilitado se houver item expirado na listagem.
 RELS: ../media/image18.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
 
 ===== slide15.xml =====
@@ -138,16 +138,16 @@ RELS: ../media/image20.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.x
 ===== slide17.xml =====
 Pedido confirmado
 3D Store — Projeto de E-commerce
-Após finalizar, o pedido nasce em aberto e aguarda o ateliê processar.
-O cliente vê o resumo, o endereço e a forma de envio.
-Quando o admin processa, o sistema confirma o pagamento.
+Após finalizar, o pedido nasce EM PROCESSAMENTO e a operadora valida o pagamento.
+O cliente vê itens, endereço, frete e a forma de pagamento.
+APROVADA segue o ciclo; REPROVADA devolve o estoque ao catálogo.
 RELS: ../media/image21.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
 
 ===== slide18.xml =====
 Consulta do pedido
 3D Store — Projeto de E-commerce
-Na conta, o cliente acompanha status, itens, endereço e histórico.
-Daqui saem o cancelamento (enquanto permitido), o recebimento e o pedido de troca.
+Na conta, o cliente acompanha o status DRS, os itens e o histórico.
+A troca só é pedida após ENTREGUE; o admin autoriza e emite cupom.
 Cada transição fica registrada na linha do tempo.
 RELS: ../media/image22.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
 
@@ -168,11 +168,11 @@ O checkout reutiliza esses registros sem reeditar o cadastro.
 RELS: ../media/image24.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
 
 ===== slide21.xml =====
-Gráficos de vendas
+Histórico de vendas
 3D Store — Projeto de E-commerce
-O painel administrativo mostra a receita ao longo dos meses em gráfico de linha.
-Há também o recorte por categoria para o ateliê acompanhar o mix vendido.
-Os dados vêm dos pedidos já registrados no protótipo.
+Gráfico de linhas por categoria: eixo X mês/ano e eixo Y em reais.
+O admin informa o período e compara categorias; só compras ENTREGUE entram.
+A consulta responde em até 1 segundo e meses zerados não poluem a lista.
 RELS: ../media/image25.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
 
 ===== slide22.xml =====
@@ -186,24 +186,24 @@ RELS: ../media/image26.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.x
 ===== slide23.xml =====
 Lista de pedidos
 3D Store — Projeto de E-commerce
-Central de vendas do ateliê: filtrar, abrir o pedido e avançar o status.
-Daqui o admin processa pagamento, despacha e trata trocas.
+Central de vendas: filtrar, abrir o pedido e avançar o status DRS.
+O admin despacha (EM TRANSPORTE), confirma ENTREGUE e trata trocas.
 O fluxo evita o trânsito quando a modalidade é retirada.
 RELS: ../media/image27.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
 
 ===== slide24.xml =====
 Lista de produtos
 3D Store — Projeto de E-commerce
-CRUD administrativo do catálogo: incluir, editar e remover peças.
-Nome, preço, categoria, cores e mídia alimentam a loja imediatamente.
-É o equivalente ao cadastro de livros do DRS, adaptado à impressão 3D.
+Incluir, editar e excluir peças. A exclusão não altera pedidos nem o gráfico.
+Nome, preço, categoria, descrição, material, cores e estoque são obrigatórios.
+Variação de preço acima de 10% pede duas confirmações seguidas.
 RELS: ../media/image28.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
 
 ===== slide25.xml =====
 Lista de cupons
 3D Store — Projeto de E-commerce
-O admin cria cupons promocionais ou de troca, com código e percentual.
-Cupons de troca ficam vinculados ao cliente após uma troca aceita.
+O admin cria cupons promocionais ou de troca, com código e valor em reais.
+Cupons de troca ficam vinculados ao cliente após o recebimento da troca.
 No checkout, o código é digitado e o desconto incide sobre o subtotal.
 RELS: ../media/image29.png, ../media/image1.jpeg, ../slideLayouts/slideLayout6.xml
 

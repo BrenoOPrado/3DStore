@@ -1,81 +1,120 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { categories, formatPrice, type CategoryId } from "../../data/products";
 import { type ChartData, type ChartSeries } from "../../data/commerce";
+import { brToIsoDate } from "../../data/dates";
+import { DateField } from "../../components/DateField";
 import { useStore } from "../../context/StoreContext";
 
 function MultiLineChart({ months, series }: { months: string[]; series: ChartSeries[] }) {
-  const w = 720;
-  const h = 300;
-  const padL = 96;
-  const padR = 20;
-  const padT = 20;
-  const padB = 44;
+  const data = useMemo(
+    () =>
+      months.map((month, i) => {
+        const row: Record<string, string | number> = { month };
+        for (const s of series) row[s.id] = s.points[i] ?? 0;
+        return row;
+      }),
+    [months, series]
+  );
   const max = Math.max(1, ...series.flatMap((s) => s.points));
-  const innerW = w - padL - padR;
-  const innerH = h - padT - padB;
-  const n = months.length;
-  const xAt = (i: number) => padL + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
-  const yAt = (v: number) => padT + innerH - (v / max) * innerH;
-  const ticks = [1, 0.5, 0];
+  const ticks = [0, max / 2, max];
+  const rotate = months.length >= 12;
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="line-chart" role="img" aria-label="Histórico de vendas por categoria">
-      {ticks.map((t) => {
-        const y = yAt(max * t);
-        return (
-          <g key={t}>
-            <line className="line-chart__grid" x1={padL} x2={w - padR} y1={y} y2={y} />
-            <text className="line-chart__tick" x={padL - 8} y={y + 4} textAnchor="end">
-              {formatPrice(max * t)}
-            </text>
-          </g>
-        );
-      })}
-      {series.map((s) => {
-        const line = s.points
-          .map((v, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(v).toFixed(1)}`)
-          .join(" ");
-        return (
-          <g key={s.id} data-testid={`chart-series-${s.id}`}>
-            <path d={line} fill="none" stroke={s.color} strokeWidth="2.5" />
-            {s.points.map((v, i) => (
-              <circle key={`${s.id}-${i}`} cx={xAt(i)} cy={yAt(v)} r="4" fill={s.color}>
-                <title>
-                  {s.label} · {months[i]}: {formatPrice(v)}
-                </title>
-              </circle>
-            ))}
-          </g>
-        );
-      })}
-      {months.map((label, i) => (
-        <text key={label} className="line-chart__xlabel" x={xAt(i)} y={h - 14} textAnchor="middle">
-          {label}
-        </text>
+    <div
+      className={rotate ? "line-chart line-chart--rotated" : "line-chart"}
+      role="img"
+      aria-label="Histórico de vendas por categoria"
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 16, right: 16, left: 8, bottom: rotate ? 36 : 8 }}>
+          <CartesianGrid stroke="rgba(255, 255, 255, 0.08)" vertical={false} />
+          <XAxis
+            dataKey="month"
+            tick={{ fill: "#9ca3af", fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+            interval={0}
+            angle={rotate ? -40 : 0}
+            textAnchor={rotate ? "end" : "middle"}
+            height={rotate ? 56 : 30}
+          />
+          <YAxis
+            tickFormatter={(value) => formatPrice(Number(value))}
+            ticks={ticks}
+            domain={[0, max]}
+            tick={{ fill: "#9ca3af", fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+            width={88}
+          />
+          <Tooltip
+            formatter={(value, name) => [formatPrice(Number(value ?? 0)), String(name)]}
+            contentStyle={{
+              background: "#12121c",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: 12,
+              fontSize: 13,
+              color: "#fff",
+            }}
+            labelStyle={{ color: "#9ca3af" }}
+            cursor={{ stroke: "rgba(255, 255, 255, 0.12)" }}
+            isAnimationActive={false}
+          />
+          {series.map((s) => (
+            <Line
+              key={s.id}
+              type="linear"
+              dataKey={s.id}
+              name={s.label}
+              stroke={s.color}
+              strokeWidth={2.5}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              dot={{ r: 4, fill: s.color, strokeWidth: 0 }}
+              activeDot={{ r: 5, fill: s.color, strokeWidth: 0 }}
+              isAnimationActive={false}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+      {series.map((s) => (
+        <span key={s.id} data-testid={`chart-series-${s.id}`} hidden />
       ))}
-    </svg>
+    </div>
   );
 }
 
 export function AdminChartPage() {
   const { loadChart } = useStore();
   const [selected, setSelected] = useState<CategoryId[]>([]);
-  const [start, setStart] = useState("2026-01-01");
-  const [end, setEnd] = useState("2026-12-31");
+  const [start, setStart] = useState("01/01/2026");
+  const [end, setEnd] = useState("31/12/2026");
   const [chart, setChart] = useState<ChartData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [openIds, setOpenIds] = useState<CategoryId[]>([]);
+  const startIso = brToIsoDate(start);
+  const endIso = brToIsoDate(end);
 
   useEffect(() => {
+    if (!startIso || !endIso) return;
     let live = true;
     const t0 = performance.now();
     loadChart({
       categoryIds: selected,
-      start: `${start}T00:00:00.000Z`,
-      end: `${end}T23:59:59.000Z`,
+      start: `${startIso}T00:00:00.000Z`,
+      end: `${endIso}T23:59:59.000Z`,
     }).then((data) => {
       if (!live) return;
       setElapsedMs(Math.round(performance.now() - t0));
@@ -89,7 +128,7 @@ export function AdminChartPage() {
     return () => {
       live = false;
     };
-  }, [end, loadChart, selected, start]);
+  }, [endIso, loadChart, selected, startIso]);
 
   const series = chart?.series ?? [];
   const months = chart?.months ?? [];
@@ -122,26 +161,8 @@ export function AdminChartPage() {
       <section className="panel card-surface">
         <h2 className="panel__title">Período</h2>
         <div className="form-grid">
-          <label className="field">
-            <span className="field__label">Data de início</span>
-            <input
-              className="field__control"
-              type="date"
-              data-testid="chart-start"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span className="field__label">Data de fim</span>
-            <input
-              className="field__control"
-              type="date"
-              data-testid="chart-end"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-            />
-          </label>
+          <DateField label="Data de início" value={start} onChange={setStart} testId="chart-start" />
+          <DateField label="Data de fim" value={end} onChange={setEnd} testId="chart-end" />
         </div>
         {error && (
           <p className="form-error" data-testid="chart-error">

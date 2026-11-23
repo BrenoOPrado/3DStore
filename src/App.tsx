@@ -26,6 +26,7 @@ import { AdminCustomersPage } from "./pages/admin/AdminCustomersPage";
 import { AdminCustomerRoute, AdminOrderDetailPage, AdminOrdersPage } from "./pages/admin/AdminOrdersPage";
 import { AdminProductsPage } from "./pages/admin/AdminProductsPage";
 import { AdminCouponsPage } from "./pages/admin/AdminCouponsPage";
+import { AdminAiPage } from "./pages/admin/AdminAiPage";
 
 function Boot({ children }: { children: ReactNode }) {
   const { ready } = useStore();
@@ -70,6 +71,7 @@ export default function App() {
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminChartPage />} />
+              <Route path="ia" element={<AdminAiPage />} />
               <Route path="clientes" element={<AdminCustomersPage />} />
               <Route path="clientes/:id" element={<AdminCustomerRoute />} />
               <Route path="pedidos" element={<AdminOrdersPage />} />

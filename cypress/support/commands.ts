@@ -120,12 +120,17 @@ Cypress.Commands.add("fillAddress", (address = {}) => {
   }
 });
 
+function isoToBrDate(iso: string) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
 Cypress.Commands.add("fillSignup", (client, address) => {
   cy.get('[data-testid="name"]').clear().type(client.name);
   cy.get('[data-testid="email"]').clear().type(client.email);
   cy.get('[data-testid="cpf"]').clear().type(client.cpf);
   cy.get('[data-testid="gender"]').select("Feminino");
-  cy.get('[data-testid="birth-date"]').clear().type(client.birthDate);
+  cy.get('[data-testid="birth-date"]').clear().type(isoToBrDate(client.birthDate));
   cy.get('[data-testid="phone-type"]').select("celular");
   cy.get('[data-testid="phone-ddd"]').clear().type(client.phoneDdd);
   cy.get('[data-testid="phone-number"]').clear().type(client.phoneNumber);

@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { formatPrice } from "../../data/products";
 import { STATUS_LABEL, formatAddress, formatCouponValue } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
+import { formatDateTimeBr } from "../../data/dates";
 
 export function AccountOrderDetailPage() {
   const { id } = useParams();
@@ -102,7 +103,7 @@ export function AccountOrderDetailPage() {
               <strong>{STATUS_LABEL[h.status]}</strong>
               <span className="muted">
                 {" "}
-                · {new Date(h.at).toLocaleString("pt-BR")} · {h.by}
+                · {formatDateTimeBr(h.at)} · {h.by}
               </span>
             </li>
           ))}

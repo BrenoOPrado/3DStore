@@ -2,10 +2,12 @@ import { FormEvent, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
 import { Field, SelectField } from "../components/Field";
+import { DateField } from "../components/DateField";
 import { AddressFields, emptyAddress } from "../components/AddressFields";
 import { useStore } from "../context/StoreContext";
 import { maskCpf } from "../data/checkout";
 import { PHONE_TYPES } from "../data/customerRules";
+import { brToIsoDate } from "../data/dates";
 
 export function LoginPage() {
   const { login } = useStore();
@@ -88,6 +90,7 @@ export function SignupPage() {
     e.preventDefault();
     const err = await signup({
       ...form,
+      birthDate: brToIsoDate(form.birthDate) ?? form.birthDate,
       address: { ...address, recipient: address.recipient || form.name },
     });
     if (err) setError(err);
@@ -130,9 +133,8 @@ export function SignupPage() {
             options={["Feminino", "Masculino", "Outro", "Prefiro não informar"]}
             testId="gender"
           />
-          <Field
+          <DateField
             label="Nascimento"
-            type="date"
             value={form.birthDate}
             onChange={set("birthDate")}
             testId="birth-date"

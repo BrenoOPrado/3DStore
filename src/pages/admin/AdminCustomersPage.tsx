@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useStore } from "../../context/StoreContext";
 import { type CustomerFilter } from "../../data/customerRules";
 import type { Customer } from "../../data/commerce";
+import { formatDateBr } from "../../data/dates";
 
 const emptyFilter: CustomerFilter = {
   id: "",
@@ -165,7 +166,7 @@ export function AdminCustomerDetailPage({ id }: { id: string }) {
           Código {c.id} · {c.email} · {c.phone} · CPF {c.cpf}
         </p>
         <p className="muted">
-          {c.gender} · nasc. {c.birthDate} · {c.status} · ranking {c.ranking}
+          {c.gender} · nasc. {formatDateBr(c.birthDate)} · {c.status} · ranking {c.ranking}
         </p>
         {msg && (
           <p className={msg.includes("Cliente") ? "form-ok" : "form-error"} data-testid="form-ok">

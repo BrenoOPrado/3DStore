@@ -1,13 +1,17 @@
+import "dotenv/config";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { clearAllSessions, COOKIE, createSession, destroySession, getSession, setLastOrderId } from "./session";
 import * as app from "./services";
+import { getLlmStatus } from "./ai/llm";
 import { loadStore } from "./store";
 import type { Address, CustomerStatus, OrderStatus } from "./data/commerce";
 import type { Product } from "./data/products";
 
 loadStore();
+const llmBoot = getLlmStatus();
+console.log(`[ai] ${llmBoot.label}`);
 
 const PORT = Number(process.env.PORT || 3001);
 const server = express();
@@ -304,6 +308,30 @@ server.get("/api/admin/chart", (req, res) => {
     return;
   }
   res.json(result);
+});
+
+server.post("/api/chat", async (req, res, next) => {
+  try {
+    sendResult(req, res, await app.chatAsk(customerIdOf(req), String(req.body?.message ?? "")));
+  } catch (err) {
+    next(err);
+  }
+});
+
+server.post("/api/chat/feedback", (req, res) => {
+  sendResult(req, res, app.chatFeedback(customerIdOf(req), req.body ?? {}));
+});
+
+server.get("/api/chat/model", (req, res) => {
+  sendResult(req, res, app.chatModelInfo(customerIdOf(req)));
+});
+
+server.get("/api/admin/ai", (req, res) => {
+  sendResult(req, res, app.adminAiStatus(customerIdOf(req)));
+});
+
+server.post("/api/admin/ai/retrain", (req, res) => {
+  sendResult(req, res, app.adminRetrainAi(customerIdOf(req)));
 });
 
 server.post("/api/dev/expire-locks", (req, res) => {

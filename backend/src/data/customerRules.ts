@@ -68,6 +68,32 @@ export function validateAddress(address: Omit<Address, "id">) {
   return null;
 }
 
+export function isValidYmd(year: number, month: number, day: number) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  return dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day;
+}
+
+/** Accepts `yyyy-mm-dd` or `dd/mm/aaaa` and returns ISO, or null if invalid. */
+export function parseToIsoDate(value: string) {
+  const trimmed = value.trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (iso) {
+    const y = Number(iso[1]);
+    const m = Number(iso[2]);
+    const d = Number(iso[3]);
+    return isValidYmd(y, m, d) ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
+  }
+  const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+  if (!br) return null;
+  const d = Number(br[1]);
+  const m = Number(br[2]);
+  const y = Number(br[3]);
+  if (!isValidYmd(y, m, d)) return null;
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 export function validateCustomerCore(data: {
   name: string;
   email: string;
@@ -81,6 +107,7 @@ export function validateCustomerCore(data: {
   if (data.name.trim().length < 2) return "Informe seu nome.";
   if (!data.gender.trim()) return "Informe o gênero.";
   if (!data.birthDate) return "Informe a data de nascimento.";
+  if (!parseToIsoDate(data.birthDate)) return "Data de nascimento inválida.";
   if (!validateCpf(data.cpf)) return "CPF inválido.";
   if (!PHONE_TYPES.includes(data.phoneType as (typeof PHONE_TYPES)[number])) {
     return "Informe o tipo de telefone.";

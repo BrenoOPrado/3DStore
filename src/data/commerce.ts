@@ -70,6 +70,7 @@ export type Customer = {
   role: Role;
   ranking: number;
   orderCount?: number;
+  preferences?: string[];
   addresses: Address[];
   cards: Card[];
 };

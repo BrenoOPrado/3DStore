@@ -3,6 +3,7 @@ import { useStore } from "../../context/StoreContext";
 
 const links = [
   { to: "/admin", label: "Gráfico", end: true },
+  { to: "/admin/ia", label: "IA" },
   { to: "/admin/clientes", label: "Clientes" },
   { to: "/admin/pedidos", label: "Pedidos" },
   { to: "/admin/produtos", label: "Produtos" },

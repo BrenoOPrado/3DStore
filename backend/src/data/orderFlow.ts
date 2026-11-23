@@ -141,9 +141,8 @@ export function chartMonthKey(iso: string) {
 }
 
 export function chartMonthLabel(key: string) {
-  const [y, m] = key.split("-").map(Number);
-  const d = new Date(Date.UTC(y, m - 1, 1));
-  return d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(".", "");
+  const [y, m] = key.split("-");
+  return `01/${m}/${y}`;
 }
 
 export function monthRangeKeys(startIso: string, endIso: string) {

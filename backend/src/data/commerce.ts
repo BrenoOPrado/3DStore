@@ -7,8 +7,15 @@ import {
   type ExpiredCartItem,
   type StoreNotification,
 } from "./orderFlow";
+import {
+  emptyModel,
+  trainAiModel,
+  type AiModel,
+  type ChatFeedback,
+} from "../ai/recommender";
 
 export { DEFAULT_LOCK_MS };
+export type { AiModel, ChatFeedback };
 
 export type Role = "client" | "admin";
 export type CustomerStatus = "ativo" | "inativo";
@@ -81,6 +88,8 @@ export type Customer = {
   status: CustomerStatus;
   role: Role;
   ranking: number;
+  /** Preferências explícitas (chat / perfil). Histórico de compras também alimenta o modelo. */
+  preferences?: string[];
   addresses: Address[];
   cards: Card[];
 };
@@ -179,6 +188,8 @@ export type CommerceState = {
   notifications: StoreNotification[];
   clockOffsetMs: number;
   lockTtlMs: number;
+  chatFeedback: ChatFeedback[];
+  aiModel: AiModel;
 };
 
 export function uid(prefix = "id") {
@@ -243,6 +254,7 @@ export function migrateCustomer(c: Customer): Customer {
     phoneDdd: c.phoneDdd || fromPhone.slice(0, 2) || "11",
     phoneNumber: c.phoneNumber || fromPhone.slice(2),
     ranking: c.ranking ?? 0,
+    preferences: c.preferences ?? [],
     addresses: (c.addresses ?? []).map((a) => migrateAddress(a)),
     cards,
   };
@@ -379,6 +391,202 @@ function makeOrder(partial: Omit<Order, "history" | "subtotal" | "shippingPrice"
   return { ...partial, history, subtotal, shippingPrice, discount, total };
 }
 
+const SAFE_2026_CHART_CATEGORIES = new Set<CategoryId>([
+  "games",
+  "cutelaria",
+  "acessorios",
+  "action-figures",
+]);
+
+function buildTrafficOrders(
+  paidFlow: (start: string, processAt: string, approveAt: string, shipAt?: string, deliverAt?: string) => StatusEvent[],
+  pac: ShippingOption,
+  sedex: ShippingOption,
+  pacRj: ShippingOption
+): Order[] {
+  const rand = mulberry32(20250101);
+  const pick = <T,>(list: T[]) => list[Math.floor(rand() * list.length)]!;
+  const addHours = (iso: string, hours: number) => new Date(new Date(iso).getTime() + hours * 3600 * 1000).toISOString();
+  const addDays = (iso: string, days: number) => addHours(iso, days * 24);
+  const catalog = seedCatalog.filter((p) => p.colors.length > 0);
+  const safeCatalog = catalog.filter((p) => SAFE_2026_CHART_CATEGORIES.has(p.category));
+  const pickup = calculateShipping("01310100")[2];
+  const pacMg = calculateShipping("30130141")[0];
+  const sedexMg = calculateShipping("30130141")[1];
+  const pacPr = calculateShipping("80020320")[0];
+  const buyers = [
+    {
+      id: "cust-ana",
+      email: "ana.souza@email.com",
+      name: "Ana Souza",
+      address: anaHome,
+      card: { cardId: "card-ana-1", last4: "1111", brand: "Visa" },
+      ships: [pac, sedex, pickup],
+      weight: 26,
+    },
+    {
+      id: "cust-carla",
+      email: "carla.mendes@email.com",
+      name: "Carla Mendes",
+      address: carlaHome,
+      card: { cardId: "card-carla-1", last4: "1881", brand: "Visa" },
+      ships: [pac, sedex],
+      weight: 20,
+    },
+    {
+      id: "cust-diego",
+      email: "diego.alves@email.com",
+      name: "Diego Alves",
+      address: diegoHome,
+      card: { cardId: "card-diego-1", last4: "1111", brand: "Visa" },
+      ships: [pac, sedex, pickup],
+      weight: 20,
+    },
+    {
+      id: "cust-fernanda",
+      email: "fernanda.costa@email.com",
+      name: "Fernanda Costa",
+      address: fernandaHome,
+      card: { cardId: "card-fernanda-1", last4: "4444", brand: "Mastercard" },
+      ships: [pacMg, sedexMg],
+      weight: 18,
+    },
+    {
+      id: "cust-rafael",
+      email: "rafael.nunes@email.com",
+      name: "Rafael Nunes",
+      address: rafaelHome,
+      card: { cardId: "card-rafael-1", last4: "1881", brand: "Visa" },
+      ships: [pacPr, calculateShipping("80020320")[1]],
+      weight: 12,
+    },
+    {
+      id: "cust-bruno",
+      email: "bruno.lima@email.com",
+      name: "Bruno Lima",
+      address: brunoHome,
+      card: { cardId: "card-bruno-1", last4: "0000", brand: "Visa" },
+      ships: [pacRj],
+      weight: 4,
+    },
+  ];
+  const weightSum = buyers.reduce((s, b) => s + b.weight, 0);
+  const pickBuyer = () => {
+    let n = rand() * weightSum;
+    for (const b of buyers) {
+      n -= b.weight;
+      if (n <= 0) return b;
+    }
+    return buyers[0];
+  };
+
+  const startMs = Date.UTC(2025, 0, 1, 12, 0, 0);
+  const endMs = Date.UTC(2026, 10, 8, 20, 0, 0);
+  const nowMs = Date.UTC(2026, 10, 9, 12, 0, 0);
+
+  const orders: Order[] = [];
+  for (let i = 0; i < 100; i++) {
+    const t = rand() ** 0.72;
+    const createdMs = startMs + t * (endMs - startMs);
+    const created = new Date(createdMs);
+    const hour = 11 + Math.floor(rand() * 10);
+    const minute = Math.floor(rand() * 60);
+    const createdAt = new Date(
+      Date.UTC(created.getUTCFullYear(), created.getUTCMonth(), created.getUTCDate(), hour, minute, 0)
+    ).toISOString();
+    const year = created.getUTCFullYear();
+    const ageDays = (nowMs - createdMs) / 86400000;
+    const wantDelivered = ageDays > 12 && rand() > 0.18;
+    const productPool = year === 2026 && wantDelivered ? safeCatalog : catalog;
+    const first = pick(productPool);
+    const items = [
+      itemFrom(first.id, pick(first.colors), rand() < 0.18 ? 2 : 1, `oi-t-${i}-a`),
+    ];
+    if (rand() < 0.16) {
+      const extraPool = year === 2026 && wantDelivered ? safeCatalog : catalog;
+      const second = pick(extraPool.filter((p) => p.id !== first.id));
+      items.push(itemFrom(second.id, pick(second.colors), 1, `oi-t-${i}-b`));
+    }
+
+    let status: OrderStatus = "ENTREGUE";
+    if (ageDays < 2) status = rand() < 0.55 ? "EM_PROCESSAMENTO" : "APROVADA";
+    else if (ageDays < 8) status = rand() < 0.35 ? "APROVADA" : rand() < 0.7 ? "EM_TRANSPORTE" : "ENTREGUE";
+    else if (rand() < 0.06) status = "REPROVADA";
+    else if (rand() < 0.05) status = "TROCADO";
+    else if (rand() < 0.04) status = "EM_TROCA";
+    else if (rand() < 0.04) status = "TROCA_AUTORIZADA";
+    else if (rand() < 0.08) status = "APROVADA";
+    else if (rand() < 0.06) status = "EM_TRANSPORTE";
+    else status = "ENTREGUE";
+
+    const risky2026 = year === 2026 && items.some((it) => !SAFE_2026_CHART_CATEGORIES.has(it.category));
+    if (status === "ENTREGUE" && risky2026) {
+      status = ageDays < 20 ? "EM_TRANSPORTE" : "APROVADA";
+    }
+
+    const buyer = pickBuyer();
+    const processAt = addHours(createdAt, 0.02);
+    const approveAt = addHours(createdAt, 0.04);
+    const shipAt = addDays(createdAt, 1 + Math.floor(rand() * 2));
+    const deliverAt = addDays(createdAt, 5 + Math.floor(rand() * 6));
+    let history: StatusEvent[];
+    if (status === "EM_PROCESSAMENTO") {
+      history = [event("EM_PROCESSAMENTO", createdAt, "cliente")];
+    } else if (status === "REPROVADA") {
+      history = [event("EM_PROCESSAMENTO", createdAt, "cliente"), event("REPROVADA", approveAt, "sistema")];
+    } else if (status === "APROVADA") {
+      history = paidFlow(createdAt, processAt, approveAt);
+    } else if (status === "EM_TRANSPORTE") {
+      history = paidFlow(createdAt, processAt, approveAt, shipAt);
+    } else if (status === "ENTREGUE") {
+      history = paidFlow(createdAt, processAt, approveAt, shipAt, deliverAt);
+    } else if (status === "EM_TROCA") {
+      history = [
+        ...paidFlow(createdAt, processAt, approveAt, shipAt, deliverAt),
+        event("EM_TROCA", addDays(deliverAt, 2), "cliente"),
+      ];
+    } else if (status === "TROCA_AUTORIZADA") {
+      history = [
+        ...paidFlow(createdAt, processAt, approveAt, shipAt, deliverAt),
+        event("EM_TROCA", addDays(deliverAt, 2), "cliente"),
+        event("TROCA_AUTORIZADA", addDays(deliverAt, 2.4), "admin"),
+      ];
+    } else {
+      history = [
+        ...paidFlow(createdAt, processAt, approveAt, shipAt, deliverAt),
+        event("EM_TROCA", addDays(deliverAt, 2), "cliente"),
+        event("TROCA_AUTORIZADA", addDays(deliverAt, 2.3), "admin"),
+        event("TROCADO", addDays(deliverAt, 6), "admin"),
+      ];
+    }
+
+    const coupons =
+      rand() < 0.12 && status !== "REPROVADA"
+        ? [{ code: "PRINT10", type: "promocional" as const, value: 10 }]
+        : [];
+    const order = makeOrder({
+      id: `3DS-${100014 + i}`,
+      customerId: buyer.id,
+      customerEmail: buyer.email,
+      customerName: buyer.name,
+      createdAt,
+      status,
+      items,
+      address: buyer.address,
+      shipping: pick(buyer.ships),
+      coupons,
+      payments: [{ ...buyer.card, amount: 0 }],
+      history,
+      ...(status === "EM_TROCA" || status === "TROCA_AUTORIZADA" || status === "TROCADO"
+        ? { exchangeItemId: items[0].id, exchangeQty: 1 }
+        : {}),
+    });
+    order.payments[0].amount = order.total;
+    orders.push(order);
+  }
+  return orders.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
 const anaHome: Address = addressDefaults({
   id: "addr-ana-1",
   label: "Casa",
@@ -444,6 +652,74 @@ const brunoHome: Address = addressDefaults({
   state: "RJ",
 });
 
+const diegoHome: Address = addressDefaults({
+  id: "addr-diego-1",
+  label: "Casa",
+  kind: "ambos",
+  recipient: "Diego Alves",
+  phone: "(11) 99111-3344",
+  cep: "05422-030",
+  streetType: "Rua",
+  street: "Teodoro Sampaio",
+  number: "1020",
+  neighborhood: "Pinheiros",
+  city: "São Paulo",
+  state: "SP",
+});
+
+const fernandaHome: Address = addressDefaults({
+  id: "addr-fernanda-1",
+  label: "Casa",
+  kind: "ambos",
+  recipient: "Fernanda Costa",
+  phone: "(31) 99876-2211",
+  cep: "30130-141",
+  streetType: "Avenida",
+  street: "Afonso Pena",
+  number: "867",
+  complement: "Sala 3",
+  neighborhood: "Centro",
+  city: "Belo Horizonte",
+  state: "MG",
+});
+
+const rafaelHome: Address = addressDefaults({
+  id: "addr-rafael-1",
+  label: "Casa",
+  kind: "ambos",
+  recipient: "Rafael Nunes",
+  phone: "(41) 98765-0099",
+  cep: "80020-320",
+  streetType: "Rua",
+  street: "XV de Novembro",
+  number: "412",
+  neighborhood: "Centro",
+  city: "Curitiba",
+  state: "PR",
+});
+
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seedCpf(base9: string) {
+  const n = base9.replace(/\D/g, "").padStart(9, "0").slice(-9);
+  const digit = (base: string, factor: number) => {
+    let sum = 0;
+    for (let i = 0; i < base.length; i++) sum += Number(base[i]) * (factor - i);
+    const rest = (sum * 10) % 11;
+    return String(rest === 10 ? 0 : rest);
+  };
+  const d1 = digit(n, 10);
+  return n + d1 + digit(n + d1, 11);
+}
+
 export function seedState(): CommerceState {
   const customers: Customer[] = [
     {
@@ -479,6 +755,7 @@ export function seedState(): CommerceState {
       status: "ativo",
       role: "client",
       ranking: 0,
+      preferences: ["games", "dinossauro", "utilitarios"],
       addresses: [anaHome, anaWork],
       cards: [
         {
@@ -516,6 +793,7 @@ export function seedState(): CommerceState {
       status: "ativo",
       role: "client",
       ranking: 0,
+      preferences: ["vasos", "decoracao", "luminaria"],
       addresses: [carlaHome],
       cards: [
         {
@@ -546,6 +824,90 @@ export function seedState(): CommerceState {
       ranking: 0,
       addresses: [brunoHome],
       cards: [],
+    },
+    {
+      id: "cust-diego",
+      name: "Diego Alves",
+      email: "diego.alves@email.com",
+      password: "123456",
+      cpf: seedCpf("482365910"),
+      phone: "(11) 99111-3344",
+      phoneType: "celular",
+      phoneDdd: "11",
+      phoneNumber: "991113344",
+      gender: "Masculino",
+      birthDate: "1992-03-14",
+      status: "ativo",
+      role: "client",
+      ranking: 0,
+      addresses: [diegoHome],
+      cards: [
+        {
+          id: "card-diego-1",
+          holder: "DIEGO ALVES",
+          number: "4111111111111111",
+          last4: "1111",
+          brand: "Visa",
+          expiry: "09/29",
+          preferred: true,
+        },
+      ],
+    },
+    {
+      id: "cust-fernanda",
+      name: "Fernanda Costa",
+      email: "fernanda.costa@email.com",
+      password: "123456",
+      cpf: seedCpf("609184237"),
+      phone: "(31) 99876-2211",
+      phoneType: "celular",
+      phoneDdd: "31",
+      phoneNumber: "998762211",
+      gender: "Feminino",
+      birthDate: "1989-08-22",
+      status: "ativo",
+      role: "client",
+      ranking: 0,
+      addresses: [fernandaHome],
+      cards: [
+        {
+          id: "card-fernanda-1",
+          holder: "FERNANDA COSTA",
+          number: "5555555555554444",
+          last4: "4444",
+          brand: "Mastercard",
+          expiry: "11/28",
+          preferred: true,
+        },
+      ],
+    },
+    {
+      id: "cust-rafael",
+      name: "Rafael Nunes",
+      email: "rafael.nunes@email.com",
+      password: "123456",
+      cpf: seedCpf("375820146"),
+      phone: "(41) 98765-0099",
+      phoneType: "celular",
+      phoneDdd: "41",
+      phoneNumber: "987650099",
+      gender: "Masculino",
+      birthDate: "1996-12-02",
+      status: "ativo",
+      role: "client",
+      ranking: 0,
+      addresses: [rafaelHome],
+      cards: [
+        {
+          id: "card-rafael-1",
+          holder: "RAFAEL NUNES",
+          number: "4012888888881881",
+          last4: "1881",
+          brand: "Visa",
+          expiry: "04/30",
+          preferred: true,
+        },
+      ],
     },
   ];
 
@@ -901,13 +1263,119 @@ export function seedState(): CommerceState {
         "2026-01-14T11:00:00.000Z"
       ),
     }),
+    ...buildTrafficOrders(paidFlow, pac, sedex, pacRj),
   ];
+
+  const catalog = cloneCatalog();
+  const chatFeedback: ChatFeedback[] = [
+    {
+      id: "fb-1",
+      customerId: "cust-ana",
+      messageId: "seed-ana-1",
+      query: "suporte para headset gamer",
+      reply: "Indiquei suporte de headset e torre de controles.",
+      useful: true,
+      productIds: ["suporte-headset", "torre-controles"],
+      at: "2025-06-12T15:00:00.000Z",
+    },
+    {
+      id: "fb-2",
+      customerId: "cust-ana",
+      messageId: "seed-ana-2",
+      query: "filtro dinossauro mesa",
+      reply: "Indiquei filtro-dino e gancho T-Rex.",
+      useful: true,
+      productIds: ["filtro-dino", "gancho-trex"],
+      at: "2025-08-03T11:20:00.000Z",
+    },
+    {
+      id: "fb-3",
+      customerId: "cust-ana",
+      messageId: "seed-ana-3",
+      query: "vaso zen para suculenta",
+      reply: "Sugeri vaso zen.",
+      useful: false,
+      productIds: ["vaso-zen"],
+      at: "2025-09-18T09:40:00.000Z",
+    },
+    {
+      id: "fb-4",
+      customerId: "cust-ana",
+      messageId: "seed-ana-4",
+      query: "chaveiro articulado dino",
+      reply: "Indiquei chaveiro flexi dino.",
+      useful: true,
+      productIds: ["chaveiro-flexi-dino"],
+      at: "2026-02-02T14:10:00.000Z",
+    },
+    {
+      id: "fb-5",
+      customerId: "cust-carla",
+      messageId: "seed-carla-1",
+      query: "vaso para suculenta",
+      reply: "Indiquei vasos dino e kit cogumelo.",
+      useful: true,
+      productIds: ["vasos-dino", "kit-vasos-cogumelo"],
+      at: "2025-05-22T16:00:00.000Z",
+    },
+    {
+      id: "fb-6",
+      customerId: "cust-carla",
+      messageId: "seed-carla-2",
+      query: "luminária para mesa",
+      reply: "Indiquei luminária estrela e lua.",
+      useful: true,
+      productIds: ["luminaria-estrela", "luminaria-lua"],
+      at: "2025-07-09T10:30:00.000Z",
+    },
+    {
+      id: "fb-7",
+      customerId: "cust-carla",
+      messageId: "seed-carla-3",
+      query: "torre de dados rpg",
+      reply: "Indiquei torre de dados dragão.",
+      useful: false,
+      productIds: ["torre-dados-dragao"],
+      at: "2025-10-01T19:00:00.000Z",
+    },
+    {
+      id: "fb-8",
+      customerId: "cust-carla",
+      messageId: "seed-carla-4",
+      query: "decoração geek escritório",
+      reply: "Indiquei aquário R2-D2 e luminária estrela.",
+      useful: true,
+      productIds: ["aquario-r2d2", "luminaria-estrela"],
+      at: "2026-03-14T13:45:00.000Z",
+    },
+    {
+      id: "fb-9",
+      customerId: "cust-diego",
+      messageId: "seed-diego-1",
+      query: "action figure guerreiro",
+      reply: "Indiquei busto e mini cavaleiro.",
+      useful: true,
+      productIds: ["busto-guerreiro", "mini-cavaleiro"],
+      at: "2025-11-20T12:00:00.000Z",
+    },
+    {
+      id: "fb-10",
+      customerId: "cust-fernanda",
+      messageId: "seed-fer-1",
+      query: "organizador de cabos mesa",
+      reply: "Indiquei organizador e dock.",
+      useful: true,
+      productIds: ["organizador-cabos", "dock-celular"],
+      at: "2026-01-28T17:20:00.000Z",
+    },
+  ];
+  const aiModel = trainAiModel(orders, chatFeedback, catalog, emptyModel());
 
   return {
     customers,
     orders,
     coupons,
-    catalog: cloneCatalog(),
+    catalog,
     logs: [],
     sessionId: null,
     locks: [],
@@ -915,6 +1383,8 @@ export function seedState(): CommerceState {
     notifications: [],
     clockOffsetMs: 0,
     lockTtlMs: DEFAULT_LOCK_MS,
+    chatFeedback,
+    aiModel,
   };
 }
 
@@ -936,6 +1406,13 @@ export function loadState(): CommerceState {
     parsed.notifications = parsed.notifications ?? [];
     parsed.clockOffsetMs = parsed.clockOffsetMs ?? 0;
     parsed.lockTtlMs = parsed.lockTtlMs ?? DEFAULT_LOCK_MS;
+    parsed.chatFeedback = parsed.chatFeedback?.length
+      ? parsed.chatFeedback
+      : seedState().chatFeedback;
+    parsed.aiModel =
+      parsed.aiModel?.version > 0
+        ? parsed.aiModel
+        : trainAiModel(parsed.orders, parsed.chatFeedback, parsed.catalog, emptyModel());
     parsed.sessionId = readSessionId();
     return parsed;
   } catch {

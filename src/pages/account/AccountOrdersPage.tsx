@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { formatPrice } from "../../data/products";
 import { STATUS_LABEL } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
+import { formatDateBr } from "../../data/dates";
 
 export function AccountOrdersPage() {
   const { myOrders } = useStore();
@@ -22,7 +23,7 @@ export function AccountOrdersPage() {
                 <div>
                   <p className="coupon-code">{o.id}</p>
                   <p className="muted">
-                    {new Date(o.createdAt).toLocaleDateString("pt-BR")} · {o.items.length} item(ns)
+                    {formatDateBr(o.createdAt)} · {o.items.length} item(ns)
                   </p>
                 </div>
                 <span className={`status-pill status-${o.status}`} data-testid={`order-status-${o.id}`}>

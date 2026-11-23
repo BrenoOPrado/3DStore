@@ -9,6 +9,7 @@ import {
   type OrderStatus,
 } from "../../data/commerce";
 import { useStore } from "../../context/StoreContext";
+import { formatDateBr, formatDateTimeBr } from "../../data/dates";
 import { AdminCustomerDetailPage } from "./AdminCustomersPage";
 
 export function AdminCustomerRoute() {
@@ -48,7 +49,7 @@ export function AdminOrdersPage() {
               <div>
                 <p className="coupon-code">{o.id}</p>
                 <p className="muted">
-                  {o.customerName} · {new Date(o.createdAt).toLocaleDateString("pt-BR")}
+                  {o.customerName} · {formatDateBr(o.createdAt)}
                 </p>
               </div>
               <span className={`status-pill status-${o.status}`}>{STATUS_LABEL[o.status]}</span>
@@ -174,7 +175,7 @@ export function AdminOrderDetailPage() {
               <strong>{STATUS_LABEL[h.status]}</strong>
               <span className="muted">
                 {" "}
-                · {new Date(h.at).toLocaleString("pt-BR")} · {h.by}
+                · {formatDateTimeBr(h.at)} · {h.by}
               </span>
             </li>
           ))}

@@ -44,6 +44,7 @@ import {
   hasBillingAddress,
   hasDeliveryAddress,
   hashPassword,
+  parseToIsoDate,
   passwordsMatch,
   validateAddress,
   validateCardInput,
@@ -52,7 +53,16 @@ import {
   type CustomerFilter,
 } from "./data/customerRules";
 import { categories, isListedProduct, type Product } from "./data/products";
-import { exceedsPriceConfirmThreshold, priceChangePercent, validateProduct } from "./data/productRules";
+import { exceedsPriceConfirmThreshold, priceChangePercent, listedCatalog, validateProduct } from "./data/productRules";
+import {
+  emptyModel,
+  extractPreference,
+  generateChatReply,
+  modelPublicSummary,
+  scoreProducts,
+  trainAiModel,
+} from "./ai/recommender";
+import { enhanceChatWithLlm, getLlmStatus } from "./ai/llm";
 import { publicCard, publicCustomer, publicOrder, snapshot } from "./dto";
 import { getState, resetStore, setState } from "./store";
 
@@ -143,6 +153,8 @@ export function signup(data: {
   if (state.customers.some((a) => a.cpf && a.cpf === data.cpf.replace(/\D/g, ""))) {
     return { error: "Já existe uma conta com este CPF." };
   }
+  const birthDate = parseToIsoDate(data.birthDate);
+  if (!birthDate) return { error: "Data de nascimento inválida." };
   const phone = composePhone(data.phoneType, data.phoneDdd, data.phoneNumber);
   const customer: Customer = {
     id: uid("cust"),
@@ -155,7 +167,7 @@ export function signup(data: {
     phoneDdd: data.phoneDdd.replace(/\D/g, ""),
     phoneNumber: data.phoneNumber.replace(/\D/g, ""),
     gender: data.gender,
-    birthDate: data.birthDate,
+    birthDate,
     status: "ativo",
     role: "client",
     ranking: 0,
@@ -193,6 +205,8 @@ export function updateProfile(
     phoneNumber: merged.phoneNumber,
   });
   if (coreErr) return { error: coreErr };
+  const birthDate = parseToIsoDate(merged.birthDate);
+  if (!birthDate) return { error: "Data de nascimento inválida." };
   const cpf = merged.cpf.replace(/\D/g, "");
   if (state.customers.some((c) => c.id !== current.id && c.cpf === cpf)) {
     return { error: "Já existe uma conta com este CPF." };
@@ -211,6 +225,7 @@ export function updateProfile(
               ...data,
               cpf,
               phone,
+              birthDate,
               phoneDdd: merged.phoneDdd.replace(/\D/g, ""),
               phoneNumber: merged.phoneNumber.replace(/\D/g, ""),
             }
@@ -1113,18 +1128,25 @@ function setOrderStatus(
 ) {
   const at = new Date().toISOString();
   const state = getState();
+  const orders = state.orders.map((o) =>
+    o.id === id
+      ? {
+          ...o,
+          ...extra,
+          status,
+          history: [...o.history, { status, at, by }],
+        }
+      : o
+  );
+  // Novas vendas ENTREGUE entram no ajuste fino imediatamente.
+  const aiModel =
+    status === "ENTREGUE"
+      ? trainAiModel(orders, state.chatFeedback ?? [], state.catalog, state.aiModel)
+      : state.aiModel;
   setState({
     ...state,
-    orders: state.orders.map((o) =>
-      o.id === id
-        ? {
-            ...o,
-            ...extra,
-            status,
-            history: [...o.history, { status, at, by }],
-          }
-        : o
-    ),
+    orders,
+    aiModel,
   });
 }
 
@@ -1281,6 +1303,135 @@ export function adminLogs(adminId: string | null) {
 export function resetDemo() {
   resetStore();
   return { ok: true };
+}
+
+export async function chatAsk(customerId: string | null, message: string) {
+  const current = currentUser(customerId);
+  if (isErr(current)) return current;
+  if (current.role !== "client") return { error: "O chatbot de recomendação é exclusivo para clientes." };
+  if (current.status !== "ativo") return { error: "Conta inativa." };
+  const text = String(message ?? "").trim();
+  if (!text) return { error: "Digite uma mensagem." };
+
+  const state = getState();
+  const model = state.aiModel?.version ? state.aiModel : trainAiModel(state.orders, state.chatFeedback ?? [], state.catalog, emptyModel());
+  const pref = extractPreference(text);
+  let customer = current;
+  if (pref) {
+    const preferences = [...new Set([...(current.preferences ?? []), pref])].slice(0, 12);
+    customer = { ...current, preferences };
+    setState({
+      ...state,
+      customers: state.customers.map((c) => (c.id === current.id ? customer : c)),
+      aiModel: model,
+    });
+  }
+
+  const catalog = listedCatalog(state.catalog);
+  const fallback = generateChatReply(model, catalog, customer, text);
+  const understanding = fallback.understanding!;
+  const rankedProducts = scoreProducts(model, catalog, customer, text, 8, understanding).map((r) => r.product);
+
+  const enhanced = await enhanceChatWithLlm({
+    query: text,
+    customerName: customer.name,
+    preferences: customer.preferences ?? [],
+    understanding,
+    rankedProducts,
+    catalog,
+    fallback,
+  });
+
+  const result = enhanced ?? fallback;
+  const products = result.productIds
+    .map((id) => state.catalog.find((p) => p.id === id))
+    .filter(Boolean);
+  const llm = getLlmStatus();
+  return {
+    ...result,
+    products,
+    preferences: customer.preferences ?? [],
+    llm,
+    llmUsed: Boolean(enhanced),
+  };
+}
+
+export function chatFeedback(
+  customerId: string | null,
+  input: { messageId: string; query: string; reply: string; useful: boolean; productIds?: string[] }
+) {
+  const current = currentUser(customerId);
+  if (isErr(current)) return current;
+  if (current.role !== "client") return { error: "O chatbot de recomendação é exclusivo para clientes." };
+  if (!input?.messageId) return { error: "Mensagem inválida." };
+
+  const state = getState();
+  const entry = {
+    id: uid("fb"),
+    customerId: current.id,
+    messageId: input.messageId,
+    query: String(input.query ?? ""),
+    reply: String(input.reply ?? ""),
+    useful: Boolean(input.useful),
+    productIds: Array.isArray(input.productIds) ? input.productIds.map(String) : [],
+    at: new Date().toISOString(),
+  };
+  const chatFeedback = [...(state.chatFeedback ?? []).filter((f) => f.messageId !== entry.messageId), entry];
+  const aiModel = trainAiModel(state.orders, chatFeedback, state.catalog, state.aiModel);
+  setState({ ...state, chatFeedback, aiModel });
+  writeLog(current, "insert", "chat-feedback", { id: entry.id, useful: entry.useful, messageId: entry.messageId });
+  return {
+    ok: true,
+    feedback: entry,
+    model: modelPublicSummary(aiModel),
+  };
+}
+
+export function chatModelInfo(customerId: string | null) {
+  const current = currentUser(customerId);
+  if (isErr(current)) return current;
+  const state = getState();
+  const model =
+    state.aiModel?.version > 0
+      ? state.aiModel
+      : trainAiModel(state.orders, state.chatFeedback ?? [], state.catalog, emptyModel());
+  const llm = getLlmStatus();
+  return {
+    model: modelPublicSummary(model),
+    llm,
+    feedbackCount: (state.chatFeedback ?? []).length,
+    myFeedback: (state.chatFeedback ?? []).filter((f) => f.customerId === current.id).length,
+    preferencesSource:
+      "Preferências = histórico de compras ENTREGUE (ajuste fino) + tags explícitas no chat (“gosto de vasos”) e no perfil do cliente.",
+  };
+}
+
+export function adminRetrainAi(adminId: string | null) {
+  const admin = requireAdmin(adminId);
+  if (isErr(admin)) return admin;
+  const state = getState();
+  const aiModel = trainAiModel(state.orders, state.chatFeedback ?? [], state.catalog, state.aiModel);
+  setState({ ...state, aiModel });
+  writeLog(admin, "update", "ai-model", { version: aiModel.version, sales: aiModel.salesSamples, feedback: aiModel.feedbackSamples });
+  return { ok: true, model: modelPublicSummary(aiModel) };
+}
+
+export function adminAiStatus(adminId: string | null) {
+  const admin = requireAdmin(adminId);
+  if (isErr(admin)) return admin;
+  const state = getState();
+  const model =
+    state.aiModel?.version > 0
+      ? state.aiModel
+      : trainAiModel(state.orders, state.chatFeedback ?? [], state.catalog, emptyModel());
+  const llm = getLlmStatus();
+  return {
+    model: modelPublicSummary(model),
+    llm,
+    feedback: state.chatFeedback ?? [],
+    preferencePolicy:
+      "Histórico ENTREGUE + feedback do chat + preferências explícitas. O modelo é retreinado a cada feedback e via /admin/ia. A resposta em linguagem natural usa Gemini/OpenAI quando houver chave no .env; sem chave, cai no gerador local.",
+  };
 }
 
 export { snapshot };

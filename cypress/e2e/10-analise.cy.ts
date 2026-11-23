@@ -7,8 +7,8 @@ describe("Analise grafica de vendas por categoria", () => {
     cy.loginAs(ADMIN.email, ADMIN.password);
     cy.get('[data-testid="logout"]').should("exist");
     cy.visit("/admin");
-    cy.get('[data-testid="chart-start"]').clear().type("2026-01-01");
-    cy.get('[data-testid="chart-end"]').clear().type("2026-12-31");
+    cy.get('[data-testid="chart-start"]').clear().type("01/01/2026");
+    cy.get('[data-testid="chart-end"]').clear().type("31/12/2026");
     cy.get('[data-testid="chart-cat-vasos"]').click();
     cy.get('[data-testid="chart-total-vasos"]').should("contain", "149,80");
     cy.get('[data-testid="sales-line-chart"]').should("exist");
@@ -53,7 +53,7 @@ describe("Analise grafica de vendas por categoria", () => {
     cy.visit("/admin");
     cy.get('[data-testid="chart-cat-vasos"]').click();
     cy.get('[data-testid="chart-total-vasos"]').should("contain", "149,80");
-    cy.get('[data-testid="chart-end"]').clear().type("2026-01-31");
+    cy.get('[data-testid="chart-end"]').clear().type("31/01/2026");
     cy.get('[data-testid="chart-total-vasos"]').should("contain", "79,90");
     cy.get('[data-testid="chart-total-vasos"]').should("not.contain", "149,80");
   });

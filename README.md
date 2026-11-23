@@ -27,9 +27,11 @@ Contas de demonstração: `ana.souza@email.com` / `123456` e `admin@3dstore.com`
 | Camada | Tecnologia |
 | --- | --- |
 | Frontend | React 19 + TypeScript + Vite 7 |
+| Gráficos | Recharts 3 |
 | Backend | Express + TypeScript (`backend/`) |
 | Sessão | cookie HTTP-only |
 | Dados | JSON em `backend/data/store.json` (gerado na primeira execução) |
+| Chatbot (RNF0044) | LLM (Gemini/OpenAI via `.env`) + ajuste fino local — ver `docs/chatbot-ia.md` |
 
 O catálogo, clientes, pedidos, cupons, frete, descontos e transições de status vivem no backend. O navegador não persiste o comércio em `localStorage` — só o carrinho da sessão de compra.
 

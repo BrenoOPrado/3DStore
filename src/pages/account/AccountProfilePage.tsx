@@ -1,10 +1,12 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Field, SelectField } from "../../components/Field";
+import { DateField } from "../../components/DateField";
 import { useStore } from "../../context/StoreContext";
 import { useCart } from "../../context/CartContext";
 import { maskCpf } from "../../data/checkout";
 import { PHONE_TYPES } from "../../data/customerRules";
+import { brToIsoDate, isoToBrDate } from "../../data/dates";
 
 export function AccountProfilePage() {
   const { user, updateProfile, deleteAccount } = useStore();
@@ -17,7 +19,7 @@ export function AccountProfilePage() {
     phoneDdd: user?.phoneDdd ?? "",
     phoneNumber: user?.phoneNumber ?? "",
     gender: user?.gender ?? "Prefiro não informar",
-    birthDate: user?.birthDate ?? "",
+    birthDate: isoToBrDate(user?.birthDate ?? ""),
   });
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -28,7 +30,10 @@ export function AccountProfilePage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const err = await updateProfile(form);
+    const err = await updateProfile({
+      ...form,
+      birthDate: brToIsoDate(form.birthDate) ?? form.birthDate,
+    });
     setMsg(err ?? "Cadastro atualizado.");
   };
 
@@ -68,9 +73,8 @@ export function AccountProfilePage() {
             options={["Feminino", "Masculino", "Outro", "Prefiro não informar"]}
             testId="gender"
           />
-          <Field
+          <DateField
             label="Nascimento"
-            type="date"
             value={form.birthDate}
             onChange={set("birthDate")}
             testId="birth-date"

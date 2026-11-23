@@ -14,3 +14,6 @@ backend/data/store.json
 *Trello*
 docs/_pptx_extract/
 docs/pptx-screens/
+
+.env
+.env.local
